@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Loader2, Check, Calendar as CalendarIcon, Share, Mail, MessageSquare, Send } from "lucide-react";
-import { format, addMonths, isBefore, isAfter, differenceInMonths, startOfToday, addDays, endOfMonth, differenceInDays, startOfMonth } from "date-fns";
+import { format, addMonths, isBefore, isAfter, differenceInMonths, startOfToday, endOfMonth, differenceInDays, startOfMonth } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -13,7 +13,6 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -262,7 +261,6 @@ export function NewBooking({ onBack, onComplete }: NewBookingProps) {
   };
 
   const today = startOfToday();
-  const minEndDate = dateRange.from ? addMonths(dateRange.from, 3) : undefined;
 
   const getNoticePeriodEndDate = () => {
     if (!dateRange.to || !noticeMonths) return null;

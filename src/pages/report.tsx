@@ -2,13 +2,12 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Download, TrendingUp, Plus, LineChart as LineChartIcon, BarChart as BarChartIcon, PieChart, X, DollarSign, Users, CalendarDays, Clock, ArrowUpDown } from "lucide-react";
+import { Download, TrendingUp, Plus, LineChart as LineChartIcon, BarChart as BarChartIcon, PieChart, X, DollarSign, Users, Clock, ArrowUpDown, Loader2 } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, ResponsiveContainer, Area, AreaChart, Line, LineChart, Pie, PieChart as RechartsPieChart, Tooltip, Legend } from "recharts";
 import { ChartConfig, ChartContainer, ChartTooltip } from "@/components/ui/chart";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { supabase } from "@/lib/supabase";
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, format, subMonths } from "date-fns";
 
 const rentChartConfig = {
@@ -441,7 +440,6 @@ export function Report() {
                   tickFormatter={(value) => `€${(value / 1000).toFixed(0)}k`}
                 />
                 <ChartTooltip
-                  cursor={false}
                   content={({ active, payload }) => {
                     if (!active || !payload?.length) return null;
                     return (
@@ -523,7 +521,6 @@ export function Report() {
                   tickFormatter={(value) => `${value}%`}
                 />
                 <ChartTooltip
-                  cursor={false}
                   content={({ active, payload }) => {
                     if (!active || !payload?.length) return null;
                     return (
@@ -615,26 +612,32 @@ export function Report() {
         </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        {activeCharts.map((chartId) => renderChart(chartId))}
-        
-        <Card 
-          className="shadow-none border-dashed cursor-pointer hover:bg-muted/50 transition-colors"
-          onClick={() => setShowAddChart(true)}
-        >
-          <CardContent className="flex flex-col items-center justify-center h-[400px] space-y-4">
-            <div className="p-4 bg-primary/10 rounded-full">
-              <Plus className="h-6 w-6 text-primary" />
-            </div>
-            <div className="text-center">
-              <h3 className="font-semibold">Add Graph</h3>
-              <p className="text-sm text-muted-foreground">
-                Click to add a new visualization
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {loading ? (
+        <div className="flex items-center justify-center h-[400px]">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : (
+        <div className="grid gap-6 md:grid-cols-2">
+          {activeCharts.map((chartId) => renderChart(chartId))}
+          
+          <Card 
+            className="shadow-none border-dashed cursor-pointer hover:bg-muted/50 transition-colors"
+            onClick={() => setShowAddChart(true)}
+          >
+            <CardContent className="flex flex-col items-center justify-center h-[400px] space-y-4">
+              <div className="p-4 bg-primary/10 rounded-full">
+                <Plus className="h-6 w-6 text-primary" />
+              </div>
+              <div className="text-center">
+                <h3 className="font-semibold">Add Graph</h3>
+                <p className="text-sm text-muted-foreground">
+                  Click to add a new visualization
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       <Dialog open={showAddChart} onOpenChange={setShowAddChart}>
         <DialogContent className="sm:max-w-[500px]">

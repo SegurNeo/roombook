@@ -13,9 +13,8 @@ interface ChartContainerProps {
   children: ReactNode;
 }
 
-interface ChartTooltipProps {
+export interface ChartTooltipProps {
   content: (props: any) => ReactNode;
-  cursor?: boolean;
 }
 
 export function ChartContainer({ config, children }: ChartContainerProps) {
@@ -37,15 +36,17 @@ export function ChartContainer({ config, children }: ChartContainerProps) {
   );
 }
 
-export function ChartTooltip({ content, cursor = true }: ChartTooltipProps) {
+export function ChartTooltip({ content }: ChartTooltipProps) {
+  const RenderContent = content;
+
   return (
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <div>{content}</div>
+          <RenderContent />
         </TooltipTrigger>
         <TooltipContent>
-          <div className="text-sm">{content}</div>
+          <RenderContent />
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>

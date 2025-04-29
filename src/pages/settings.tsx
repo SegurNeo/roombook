@@ -265,7 +265,7 @@ export function Settings() {
       if (userError) throw userError;
       if (!user) throw new Error("No authenticated user found");
 
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('services')
         .insert([{
           name: newService.name.trim(),
