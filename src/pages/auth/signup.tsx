@@ -100,7 +100,7 @@ export function SignUp() {
                description: "You have successfully joined the team! Your account is ready.",
              });
            }
-           navigate(location.pathname, { replace: true, state: {} });
+           navigate("/", { replace: true, state: {} });
          } else {
             navigate("/auth/onboarding");
          }
