@@ -125,7 +125,7 @@ export function Team() {
         .from('team_invites')
         .select('*')
         .eq('organization_id', profile.organization_id)
-        .in('status', ['pending', 'expired'])
+        .in('status', ['pending', 'sent', 'expired'])
         .order('created_at', { ascending: false });
 
       if (invitesError) throw invitesError;
