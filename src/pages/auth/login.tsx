@@ -5,13 +5,16 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 
 export function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const inviteToken = location.state?.inviteToken;
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -34,6 +37,30 @@ export function Login() {
           title: "Welcome back!",
           description: "You have successfully signed in.",
         });
+
+        if (data.user && inviteToken) {
+          console.log('Login successful, attempting to accept invite with token:', inviteToken);
+          const { error: inviteError } = await supabase.rpc('accept_team_invite', {
+            invite_token: inviteToken
+          });
+
+          if (inviteError) {
+            console.error('Error accepting team invite:', inviteError);
+            toast({
+              title: "Invite Acceptance Issue",
+              description: `Login successful, but failed to automatically accept the team invitation: ${inviteError.message}. Please contact support or try accepting later.`,
+              variant: "destructive",
+              duration: 10000,
+            });
+          } else {
+            toast({
+              title: "Invite Accepted",
+              description: "You have successfully joined the team!",
+            });
+          }
+          navigate(location.pathname, { replace: true, state: {} });
+        }
+
         navigate("/");
       }
     } catch (error) {

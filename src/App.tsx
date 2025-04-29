@@ -21,6 +21,7 @@ import { AuthCallback } from './pages/auth/callback';
 import { ConfirmEmail } from './pages/auth/confirm-email';
 import { Onboarding } from './pages/auth/onboarding';
 import { Team } from './pages/team';
+import { AcceptInvite } from './pages/auth/accept-invite';
 import { useState } from 'react';
 import { Toaster } from "@/components/ui/toaster";
 import { FormatProvider } from '@/components/format-provider';
@@ -181,6 +182,7 @@ function App() {
           <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/auth/confirm-email" element={<ConfirmEmail />} />
           <Route path="/auth/onboarding" element={<Onboarding />} />
+          <Route path="/accept-invite" element={<AcceptInvite />} />
           <Route
             path="/*"
             element={

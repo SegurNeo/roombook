@@ -66,13 +66,20 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Send emails for each invite
-    const emailPromises = invites.map(async (invite: any) => {
-      const inviteUrl = `${Deno.env.get('SITE_URL')}/accept-invite?token=${invite.id}`;
+    // Process invites sequentially to avoid rate limits
+    const results: any[] = [];
+    for (const invite of invites) {
+      // Ensure SITE_URL doesn't have a trailing slash
+      const siteUrlBase = (Deno.env.get('SITE_URL') ?? '').replace(/\/$/, ''); 
+      const inviteUrl = `${siteUrlBase}/accept-invite?token=${invite.id}`;
       
+      let emailSent = false;
+      let statusUpdateError: any = null;
+
       try {
+        // Step 1: Try sending email
         await resend.emails.send({
-          from: 'PropertyHub <onboarding@resend.dev>',
+          from: 'PropertyHub <dev@segurneo.com>',
           to: invite.email,
           subject: `You've been invited to join ${invite.organizations.name}`,
           html: `
@@ -81,7 +88,7 @@ Deno.serve(async (req) => {
               
               <p>Hello,</p>
               
-              <p>${invite.profiles.full_name} has invited you to join ${invite.organizations.name} 
+              <p>${(invite.profiles as any)?.full_name || 'Someone'} has invited you to join ${invite.organizations.name} 
               as a ${invite.role_type}.</p>
               
               <p style="margin: 2em 0;">
@@ -107,30 +114,55 @@ Deno.serve(async (req) => {
             </div>
           `,
         });
+        emailSent = true;
 
-        // Update invite status to 'sent'
-        await supabase
+        // Step 2: Try updating status if email sent
+        console.log(`Attempting to update status for invite ID: ${invite.id}`);
+        const { data: updateData, error: updateError } = await supabase
           .from('team_invites')
           .update({ status: 'sent' })
-          .eq('id', invite.id);
+          .eq('id', invite.id)
+          .select();
 
-        return {
+        console.log('Update result:', { updateData, updateError });
+
+        if (updateError) {
+          console.log('Update error detected. Throwing error...');
+          statusUpdateError = updateError;
+          throw updateError; // Throw to be caught by the outer catch
+        } else {
+            console.log('No update error detected. Proceeding...');
+        }
+
+        // Both successful
+        results.push({
           invite_id: invite.id,
           email: invite.email,
           status: 'sent',
-        };
-      } catch (error) {
-        console.error(`Failed to send email to ${invite.email}:`, error);
-        return {
-          invite_id: invite.id,
-          email: invite.email,
-          status: 'failed',
-          error: error.message,
-        };
-      }
-    });
+        });
 
-    const results = await Promise.all(emailPromises);
+      } catch (error) {
+        if (emailSent && statusUpdateError) {
+          // Error happened during status update after successful send
+          console.error(`Email sent to ${invite.email}, but failed to update status:`, statusUpdateError);
+          results.push({
+            invite_id: invite.id,
+            email: invite.email,
+            status: 'send_error_update_failed', // More specific status
+            error: statusUpdateError.message,
+          });
+        } else {
+          // Error happened during email sending (or other unexpected error)
+          console.error(`Failed to process invite for ${invite.email}:`, error);
+          results.push({
+            invite_id: invite.id,
+            email: invite.email,
+            status: 'failed', 
+            error: error.message,
+          });
+        }
+      }
+    }
 
     return new Response(
       JSON.stringify({
