@@ -1,53 +1,70 @@
 import { useState } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 
 export function SignUp() {
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const { toast } = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { toast } = useToast();
+
+  const inviteToken = location.state?.inviteToken;
 
   const validateEmail = (email: string) => {
     const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
     return emailRegex.test(email);
   };
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setIsLoading(true);
+  const validatePassword = (password: string): boolean => {
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    return passwordRegex.test(password);
+  };
 
-    const formData = new FormData(e.currentTarget);
-    const email = formData.get("email") as string;
-    const password = formData.get("password") as string;
-    const confirmPassword = formData.get("confirmPassword") as string;
-    const fullName = formData.get("fullName") as string;
-
-    if (!validateEmail(email)) {
-      toast({
-        title: "Invalid email",
-        description: "Please enter a valid email address",
-        variant: "destructive",
-      });
-      setIsLoading(false);
-      return;
-    }
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
 
     if (password !== confirmPassword) {
       toast({
-        title: "Passwords don't match",
-        description: "Please make sure your passwords match",
+        title: "Password Mismatch",
+        description: "Passwords do not match.",
         variant: "destructive",
       });
-      setIsLoading(false);
       return;
     }
+
+    if (!validatePassword(password)) {
+       toast({
+         title: "Weak Password",
+         description: "Password must be at least 8 characters long and include uppercase, lowercase, number, and special character.",
+         variant: "destructive",
+         duration: 7000,
+       });
+       return;
+     }
+
+    if (!agreedToTerms) {
+      toast({
+        title: "Terms Not Agreed",
+        description: "You must agree to the terms and conditions.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoading(true);
 
     try {
       const { data, error } = await supabase.auth.signUp({
@@ -57,23 +74,63 @@ export function SignUp() {
           data: {
             full_name: fullName,
           },
-          emailRedirectTo: undefined, // Disable email redirect
         },
       });
 
       if (error) throw error;
 
-      if (data) {
-        // Store email in session storage for verification
-        sessionStorage.setItem('verificationEmail', email);
-        navigate("/auth/confirm-email");
+      if (data.user) {
+         toast({
+           title: "Signup Successful",
+           description: "Please check your email to confirm your account.",
+         });
+
+        if (inviteToken) {
+          console.log('Signup successful, attempting to accept invite with token:', inviteToken);
+          const { error: inviteError } = await supabase.rpc('accept_team_invite', {
+             invite_token: inviteToken
+           });
+  
+           if (inviteError) {
+             console.error('Error accepting team invite post-signup:', inviteError);
+             toast({
+               title: "Invite Acceptance Issue",
+               description: `Signup successful, but failed to automatically accept the team invitation: ${inviteError.message}. You may need to accept it manually later or contact support.`, 
+               variant: "destructive",
+               duration: 10000, 
+             });
+           } else {
+             toast({
+               title: "Invite Accepted",
+               description: "You have successfully joined the team! Your account is ready.",
+             });
+           }
+           navigate(location.pathname, { replace: true, state: {} });
+         } else {
+            navigate("/auth/onboarding");
+         }
+      } else {
+         toast({
+            title: "Check Your Email",
+            description: "A confirmation link has been sent to your email address. Please verify your email to complete signup.",
+          });
       }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "An error occurred while creating your account",
-        variant: "destructive",
-      });
+
+    } catch (error: any) {
+      console.error("Signup error:", error);
+      if (error.message.includes("User already registered")) {
+         toast({
+           title: "Signup Failed",
+           description: "An account with this email already exists. Please log in instead.",
+           variant: "destructive",
+         });
+      } else {
+        toast({
+          title: "Signup Failed",
+          description: error.message || "An unexpected error occurred.",
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsLoading(false);
     }
@@ -153,6 +210,8 @@ export function SignUp() {
                 placeholder="John Doe"
                 required
                 disabled={isLoading}
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
               />
             </div>
 
@@ -165,6 +224,8 @@ export function SignUp() {
                 placeholder="john@example.com"
                 required
                 disabled={isLoading}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 pattern="[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*"
                 title="Please enter a valid email address"
               />
@@ -182,6 +243,8 @@ export function SignUp() {
                   disabled={isLoading}
                   className="pr-10"
                   minLength={6}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                 />
                 <Button
                   type="button"
@@ -212,6 +275,8 @@ export function SignUp() {
                   disabled={isLoading}
                   className="pr-10"
                   minLength={6}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
                 />
                 <Button
                   type="button"
@@ -228,6 +293,20 @@ export function SignUp() {
                   )}
                 </Button>
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Checkbox
+                id="agreedToTerms"
+                checked={agreedToTerms}
+                onCheckedChange={(checked) => setAgreedToTerms(Boolean(checked))}
+                disabled={isLoading}
+              >
+                I agree to the{" "}
+                <Link to="/terms" className="text-sm text-primary">
+                  terms and conditions
+                </Link>
+              </Checkbox>
             </div>
 
             <Button className="w-full" type="submit" disabled={isLoading}>
