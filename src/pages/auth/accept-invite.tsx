@@ -86,22 +86,7 @@ export function AcceptInvite() {
             return;
         }
 
-        // Check if user with this email already exists
-        const { data: existingUser, error: userError } = await supabase
-          .from("profiles")
-          .select("id, organization_id")
-          .eq("email", invite.email)
-          .maybeSingle();
-
-        if (userError) throw userError;
-
-        if (existingUser && invite.organizations && existingUser.organization_id === invite.organizations.id) {
-          setStatus("already_member");
-          setErrorMessage("You are already a member of this organization.");
-          return;
-        }
-
-        // If validation passed
+        // If validation passed (basic checks: token exists, not expired, status ok)
         setStatus("valid");
         setInviteDetails({
           email: invite.email,
