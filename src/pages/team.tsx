@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Pencil, Check, X, Loader2, Trash2, AlertCircle } from "lucide-react";
+import { Plus, Pencil, Check, X, Loader2, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -11,7 +11,6 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 interface TeamMember {
@@ -33,15 +32,7 @@ interface Organization {
   name: string;
 }
 
-interface RelatedItems {
-  assets: number;
-  rooms: number;
-  customers: number;
-  bookings: number;
-  amenities: number;
-  services: number;
-}
-
+// Restore color constants
 const roleColors = {
   superadmin: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300",
   admin: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300",
@@ -73,7 +64,6 @@ export function Team() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [relatedItems, setRelatedItems] = useState<RelatedItems | null>(null);
   const [replacementUserId, setReplacementUserId] = useState<string | null>(null);
   const [showReplacementDialog, setShowReplacementDialog] = useState(false);
   const { toast } = useToast();
@@ -279,38 +269,6 @@ export function Team() {
     }
   };
 
-  const getRelatedItems = async (userId: string) => {
-    try {
-      const [
-        { count: assetsCount }, 
-        { count: roomsCount },
-        { count: customersCount },
-        { count: bookingsCount },
-        { count: amenitiesCount },
-        { count: servicesCount }
-      ] = await Promise.all([
-        supabase.from('assets').select('*', { count: 'exact', head: true }).eq('created_by', userId),
-        supabase.from('rooms').select('*', { count: 'exact', head: true }).eq('created_by', userId),
-        supabase.from('customers').select('*', { count: 'exact', head: true }).eq('created_by', userId),
-        supabase.from('bookings').select('*', { count: 'exact', head: true }).eq('created_by', userId),
-        supabase.from('amenities').select('*', { count: 'exact', head: true }).eq('created_by', userId),
-        supabase.from('services').select('*', { count: 'exact', head: true }).eq('created_by', userId)
-      ]);
-
-      return {
-        assets: assetsCount || 0,
-        rooms: roomsCount || 0,
-        customers: customersCount || 0,
-        bookings: bookingsCount || 0,
-        amenities: amenitiesCount || 0,
-        services: servicesCount || 0
-      };
-    } catch (error) {
-      console.error('Error getting related items:', error);
-      return null;
-    }
-  };
-
   const handleDeleteMember = async () => {
     if (!memberToDelete) return;
 
@@ -321,10 +279,13 @@ export function Team() {
         description: "You cannot delete your own account",
         variant: "destructive"
       });
+      setShowDeleteMember(false);
+      setMemberToDelete(null);
       return;
     }
 
-    // Prevent deleting the last superadmin
+    // Last superadmin check is now handled by the backend function,
+    // but we can keep it client-side too for immediate feedback.
     if (memberToDelete.role_type === 'superadmin') {
       const superadmins = teamMembers.filter(m => m.role_type === 'superadmin');
       if (superadmins.length <= 1) {
@@ -333,20 +294,52 @@ export function Team() {
           description: "There must be at least one superadmin in the organization",
           variant: "destructive"
         });
+        setShowDeleteMember(false);
+        setMemberToDelete(null);
         return;
       }
     }
 
-    // Check for related items
-    const items = await getRelatedItems(memberToDelete.id);
-    if (items && Object.values(items).some(count => count > 0)) {
-      setRelatedItems(items);
-      setShowReplacementDialog(true);
-      return;
-    }
+    setIsSubmitting(true);
+    try {
+      // Call the RPC function without replacement ID first
+      const { error } = await supabase.rpc('remove_team_member', {
+        member_id_to_remove: memberToDelete.id
+      });
 
-    // If no related items, proceed with deletion
-    await removeMember();
+      if (error) {
+        // Check if the error indicates replacement is needed
+        if (error.message.includes('Replacement user required')) {
+          toast({
+             title: "Reassignment Required",
+             description: `${memberToDelete.full_name} has created items. Please select a replacement owner.`,
+             variant: "default",
+             duration: 7000
+          });
+          setShowReplacementDialog(true);
+        } else {
+          throw error;
+        }
+      } else {
+        toast({
+          title: "Member removed",
+          description: `Successfully removed ${memberToDelete.full_name} from the organization.`,
+        });
+        setMemberToDelete(null);
+        fetchTeamAndOrg();
+      }
+    } catch (error: any) {
+      console.error("Error removing member:", error);
+      toast({
+        title: "Error removing member",
+        description: error.message || "An unexpected error occurred.",
+        variant: "destructive"
+      });
+      setMemberToDelete(null);
+    } finally {
+      setShowDeleteMember(false);
+      setIsSubmitting(false);
+    }
   };
 
   const handleReplaceAndDelete = async () => {
@@ -355,61 +348,29 @@ export function Team() {
     setIsSubmitting(true);
 
     try {
-      // Update all related tables to replace created_by
-      const tables = ['assets', 'rooms', 'customers', 'bookings', 'amenities', 'services'];
-      
-      for (const table of tables) {
-        const { error } = await supabase
-          .from(table)
-          .update({ created_by: replacementUserId })
-          .eq('created_by', memberToDelete.id);
-        
-        if (error) throw error;
-      }
+      // Call the RPC function *with* the replacement ID
+      const { error } = await supabase.rpc('remove_team_member', {
+        member_id_to_remove: memberToDelete.id,
+        replacement_user_id: replacementUserId
+      });
 
-      // Remove the member
-      await removeMember();
-      
+      if (error) throw error;
+
+      toast({
+        title: "Member Removed and Replaced",
+        description: `${memberToDelete.full_name} has been removed and their items reassigned.`,
+      });
+
       setShowReplacementDialog(false);
       setReplacementUserId(null);
-      setRelatedItems(null);
-
-    } catch (error: any) {
-      toast({
-        title: "Error replacing user",
-        description: error.message,
-        variant: "destructive"
-      });
-      setIsSubmitting(false);
-    }
-  };
-
-  const removeMember = async () => {
-    if (!memberToDelete) return;
-
-    setIsSubmitting(true);
-
-    try {
-      // Remove organization_id from profile
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({ organization_id: null })
-        .eq('id', memberToDelete.id);
-
-      if (profileError) throw profileError;
-
-      toast({
-        title: "Member removed",
-        description: "The team member has been removed from the organization",
-      });
-
-      setShowDeleteMember(false);
       setMemberToDelete(null);
-      fetchTeamAndOrg(); // Refresh the list
+      fetchTeamAndOrg();
+
     } catch (error: any) {
+      console.error("Error replacing and removing member:", error);
       toast({
-        title: "Error removing member",
-        description: error.message,
+        title: "Error replacing member",
+        description: error.message || "Failed to reassign items and remove member.",
         variant: "destructive"
       });
     } finally {
@@ -750,21 +711,6 @@ export function Team() {
             </DialogDescription>
           </DialogHeader>
           
-          <Alert>
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Related Items</AlertTitle>
-            <AlertDescription>
-              <ul className="list-disc pl-4 mt-2 space-y-1">
-                {relatedItems?.assets ? <li>{relatedItems.assets} assets</li> : null}
-                {relatedItems?.rooms ? <li>{relatedItems.rooms} rooms</li> : null}
-                {relatedItems?.customers ? <li>{relatedItems.customers} customers</li> : null}
-                {relatedItems?.bookings ? <li>{relatedItems.bookings} bookings</li> : null}
-                {relatedItems?.amenities ? <li>{relatedItems.amenities} amenities</li> : null}
-                {relatedItems?.services ? <li>{relatedItems.services} services</li> : null}
-              </ul>
-            </AlertDescription>
-          </Alert>
-
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label>Select Replacement User</Label>
@@ -804,7 +750,7 @@ export function Team() {
               onClick={() => {
                 setShowReplacementDialog(false);
                 setReplacementUserId(null);
-                setRelatedItems(null);
+                setMemberToDelete(null);
               }}
             >
               Cancel
