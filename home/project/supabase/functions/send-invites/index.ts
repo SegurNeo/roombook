@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
       .select(`
         *,
         organizations (name),
-        profiles!invited_by (full_name)
+        profiles!team_invites_invited_by_fkey (full_name)
       `)
       .eq('status', 'pending')
       .gt('expires_at', new Date().toISOString());
