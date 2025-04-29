@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
       .select(`
         *,
         organizations (name),
-        profiles!team_invites_invited_by_fkey (full_name)
+        profiles!invited_by (full_name)
       `)
       .eq('status', 'pending')
       .gt('expires_at', new Date().toISOString());
@@ -72,7 +72,7 @@ Deno.serve(async (req) => {
       
       try {
         await resend.emails.send({
-          from: 'PropertyHub <noreply@propertyhub.com>',
+          from: 'PropertyHub <onboarding@resend.dev>',
           to: invite.email,
           subject: `You've been invited to join ${invite.organizations.name}`,
           html: `
