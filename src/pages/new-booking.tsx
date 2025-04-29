@@ -177,6 +177,16 @@ export function NewBooking({ onBack, onComplete }: NewBookingProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!dateRange.from || !dateRange.to) {
+      toast({
+        title: "Missing date range",
+        description: "Start date or end date is missing.",
+        variant: "destructive",
+      });
+      setIsCreating(false);
+      return;
+    }
+
     if (!rentPrice || !depositMonths || !noticeMonths) {
       toast({
         title: "Missing information",
@@ -261,6 +271,20 @@ export function NewBooking({ onBack, onComplete }: NewBookingProps) {
 
   const handleShare = async (method: 'email' | 'whatsapp' | 'sms') => {
     try {
+      // Calculate timeline and totalAmount within handleShare
+      const timeline = generatePaymentTimeline();
+      const totalAmount = timeline.reduce((sum, item) => sum + item.amount, 0);
+
+      // Ensure dates are defined before using format
+      if (!dateRange.from || !dateRange.to) {
+        throw new Error("Date range is not defined for sharing.");
+      }
+      const noticeEndDate = getNoticePeriodEndDate();
+      if (!noticeEndDate) {
+        throw new Error("Notice period end date could not be calculated.");
+      }
+
+      // Reformat contractData slightly to ensure no duplicates
       const contractData = {
         customer: {
           name: `${selectedCustomer.first_name} ${selectedCustomer.last_name}`,
@@ -273,11 +297,11 @@ export function NewBooking({ onBack, onComplete }: NewBookingProps) {
           details: `${selectedRoom.capacity} room • ${selectedRoom.bathroom} bathroom`,
         },
         contract: {
-          startDate: format(dateRange.from!, "PPP"),
-          endDate: format(dateRange.to!, "PPP"),
-          duration: `${differenceInMonths(dateRange.to!, dateRange.from!)} months`,
+          startDate: format(dateRange.from, "PPP"),
+          endDate: format(dateRange.to, "PPP"),
+          duration: `${differenceInMonths(dateRange.to, dateRange.from)} months`,
           noticePeriod: `${noticeMonths} months`,
-          noticeDate: format(getNoticePeriodEndDate()!, "PPP"),
+          noticeDate: format(noticeEndDate, "PPP"),
         },
         financial: {
           monthlyRent: parseFloat(rentPrice),
@@ -816,19 +840,20 @@ export function NewBooking({ onBack, onComplete }: NewBookingProps) {
                       mode="range"
                       defaultMonth={dateRange?.from}
                       selected={dateRange}
-                      onSelect={(newRange) => {
+                      onSelect={(newRange: any) => { 
                         if (newRange?.from && newRange.to) {
                           const months = differenceInMonths(newRange.to, newRange.from);
                           if (months < 3) {
                             newRange.to = addMonths(newRange.from, 3);
                           }
                         }
-                        setDateRange(newRange || { from: undefined, to: undefined });
+                        const rangeToSet = newRange ? { from: newRange.from, to: newRange.to } : { from: undefined, to: undefined };
+                        setDateRange(rangeToSet);
                       }}
                       numberOfMonths={2}
-                      disabled={(date) => 
-                        isBefore(date, today) || 
-                        (dateRange.from && isAfter(date, addMonths(dateRange.from, 24)))
+                      disabled={(date): boolean => 
+                        (isBefore(date, today) || 
+                        (dateRange.from && isAfter(date, addMonths(dateRange.from, 24)))) || false
                       }
                     />
                   </PopoverContent>

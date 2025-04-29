@@ -80,7 +80,7 @@ export function Onboarding() {
         return;
       }
 
-      const { data, error } = await supabase.rpc('create_organization_and_update_profile', {
+      const { error } = await supabase.rpc('create_organization_and_update_profile', {
         org_name: orgName.trim(),
         org_role: selectedRole,
         org_team_size: teamSize,

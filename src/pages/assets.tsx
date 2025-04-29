@@ -97,6 +97,11 @@ export function Assets({ onNewAsset }: AssetsProps) {
   const currentSelectedColumns = columnSelectorTab === "assets" ? selectedColumns : selectedRoomColumns;
   const setCurrentSelectedColumns = columnSelectorTab === "assets" ? setSelectedColumns : setSelectedRoomColumns;
 
+  // Intermediate function for Tabs onValueChange
+  const handleTabChange = (value: string) => {
+    setColumnSelectorTab(value as "assets" | "rooms");
+  };
+
   useEffect(() => {
     fetchData();
   }, [viewMode, selectedUserId]);
@@ -143,8 +148,8 @@ export function Assets({ onNewAsset }: AssetsProps) {
           avgStay: 0,
           totalBookings: 0,
           user: {
-            name: asset.profiles?.full_name || 'Unknown',
-            image: `https://api.dicebear.com/7.x/initials/svg?seed=${asset.profiles?.full_name || 'Unknown'}`
+            name: (asset.profiles as any)?.full_name || 'Unknown',
+            image: `https://api.dicebear.com/7.x/initials/svg?seed=${(asset.profiles as any)?.full_name || 'Unknown'}`
           }
         }));
 
@@ -183,7 +188,7 @@ export function Assets({ onNewAsset }: AssetsProps) {
         const transformedRooms = roomsData.map(room => ({
           id: room.id,
           name: room.name,
-          assetName: room.assets.name,
+          assetName: (room.assets as any)?.name,
           capacity: room.capacity,
           location: room.location,
           bathroom: room.bathroom,
@@ -194,8 +199,8 @@ export function Assets({ onNewAsset }: AssetsProps) {
           status: Math.random() > 0.5 ? "Available" : "Occupied",
           nextBooking: Math.random() > 0.5 ? format(new Date(Date.now() + Math.random() * 30 * 24 * 60 * 60 * 1000), "PP") : "-",
           user: {
-            name: room.profiles?.full_name || 'Unknown',
-            image: `https://api.dicebear.com/7.x/initials/svg?seed=${room.profiles?.full_name || 'Unknown'}`
+            name: (room.profiles as any)?.full_name || 'Unknown',
+            image: `https://api.dicebear.com/7.x/initials/svg?seed=${(room.profiles as any)?.full_name || 'Unknown'}`
           }
         }));
 
@@ -460,7 +465,7 @@ export function Assets({ onNewAsset }: AssetsProps) {
           <DialogHeader>
             <DialogTitle>Table Columns</DialogTitle>
           </DialogHeader>
-          <Tabs value={columnSelectorTab} onValueChange={(value: "assets" | "rooms") => setColumnSelectorTab(value)}>
+          <Tabs value={columnSelectorTab} onValueChange={handleTabChange}>
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="assets">Assets View</TabsTrigger>
               <TabsTrigger value="rooms">Rooms View</TabsTrigger>

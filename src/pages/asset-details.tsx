@@ -13,24 +13,18 @@ import { supabase } from "@/lib/supabase";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AddressInput } from "@/components/address-input";
-import { Checkbox } from "@/components/ui/checkbox";
 import { EditAssetModal } from "@/components/edit-asset-modal";
 import { 
   ArrowLeft, 
-  Building2, 
   Edit, 
   Trash2, 
   Calendar, 
   DollarSign,
-  Users,
   Percent,
   BedDouble,
   Bath,
   MapPin,
   Loader2,
-  Check,
-  Upload
 } from "lucide-react";
 import {
   BarChart,
@@ -105,18 +99,6 @@ interface EditAssetData {
   amenities: string[];
   photos: string[];
 }
-
-const defaultAmenities = [
-  { id: "wifi", label: "WiFi" },
-  { id: "ac", label: "Air Conditioning" },
-  { id: "heating", label: "Heating" },
-  { id: "washer", label: "Washer" },
-  { id: "dryer", label: "Dryer" },
-  { id: "parking", label: "Parking" },
-  { id: "elevator", label: "Elevator" },
-  { id: "pool", label: "Pool" },
-  { id: "gym", label: "Gym" },
-];
 
 export function AssetDetails() {
   const { id } = useParams();

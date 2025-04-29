@@ -101,16 +101,16 @@ export function Bookings({ onNewBooking }: BookingsProps) {
 
       const transformedBookings = bookingsData?.map(booking => ({
         id: booking.id,
-        customer: `${booking.customers.first_name} ${booking.customers.last_name}`,
-        asset: booking.rooms.assets.name,
-        room: booking.rooms.name,
+        customer: `${(booking.customers as any)?.first_name || ''} ${(booking.customers as any)?.last_name || ''}`.trim(),
+        asset: (booking.rooms as any)?.assets?.name || 'Unknown',
+        room: (booking.rooms as any)?.name || 'Unknown',
         startDate: format(new Date(booking.start_date), "PP"),
         endDate: format(new Date(booking.end_date), "PP"),
         price: `€${booking.rent_price.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
         totalRevenue: `€${(booking.rent_price + booking.deposit_amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
         user: {
-          name: booking.profiles?.full_name || 'Unknown',
-          image: `https://api.dicebear.com/7.x/initials/svg?seed=${booking.profiles?.full_name || 'Unknown'}`
+          name: (booking.profiles as any)?.full_name || 'Unknown',
+          image: `https://api.dicebear.com/7.x/initials/svg?seed=${(booking.profiles as any)?.full_name || 'Unknown'}`
         }
       })) || [];
 

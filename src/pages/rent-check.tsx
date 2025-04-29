@@ -23,6 +23,10 @@ interface RentTransaction {
   amount: number;
   type: 'rent' | 'deposit';
   status: 'pending' | 'paid' | 'late';
+  user: {
+    name?: string;
+    image?: string;
+  };
 }
 
 const statusStyles = {
@@ -120,16 +124,16 @@ export function RentCheck() {
 
       const transformedTransactions = (data || []).map(transaction => ({
         id: transaction.id,
-        customer: `${transaction.customers.first_name} ${transaction.customers.last_name}`,
-        asset: transaction.rooms.assets.name,
-        room: transaction.rooms.name,
+        customer: `${(transaction.customers as any)?.first_name || ''} ${(transaction.customers as any)?.last_name || ''}`.trim(),
+        asset: (transaction.rooms as any)?.assets?.name || 'Unknown',
+        room: (transaction.rooms as any)?.name || 'Unknown',
         dueDate: format(new Date(transaction.due_date), "PP"),
         amount: transaction.amount,
         type: transaction.type,
         status: transaction.status,
         user: {
-          name: transaction.profiles?.full_name || 'Unknown',
-          image: `https://api.dicebear.com/7.x/initials/svg?seed=${transaction.profiles?.full_name || 'Unknown'}`
+          name: (transaction.profiles as any)?.full_name || 'Unknown',
+          image: `https://api.dicebear.com/7.x/initials/svg?seed=${(transaction.profiles as any)?.full_name || 'Unknown'}`
         }
       }));
 

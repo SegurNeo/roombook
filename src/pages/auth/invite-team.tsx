@@ -76,7 +76,7 @@ export function InviteTeam({ onSkip }: InviteTeamProps) {
     setIsSubmitting(true);
 
     try {
-      const { data, error } = await supabase.rpc('send_team_invites', {
+      const { error } = await supabase.rpc('send_team_invites', {
         invites: validTeamMembers
       });
 

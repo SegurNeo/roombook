@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Sidebar } from './components/sidebar';
 import { Assets } from './pages/assets';
 import { Customers } from './pages/customers';
@@ -24,7 +24,6 @@ import { Team } from './pages/team';
 import { useState } from 'react';
 import { Toaster } from "@/components/ui/toaster";
 import { FormatProvider } from '@/components/format-provider';
-import { cn } from '@/lib/utils';
 
 interface Address {
   street: string;
@@ -69,7 +68,6 @@ function App() {
   const [showNewBooking, setShowNewBooking] = useState(false);
   const [totalRooms, setTotalRooms] = useState(0);
   const [assetData, setAssetData] = useState<AssetData | null>(null);
-  const [rooms, setRooms] = useState<Room[]>([]);
 
   const renderDashboard = () => {
     if (showAssetPreview && assetData) {
@@ -85,7 +83,6 @@ function App() {
             setShowNewAssetRooms(false);
             setCurrentPage('assets');
             setAssetData(null);
-            setRooms([]);
           }}
           assetData={assetData}
         />
@@ -100,7 +97,6 @@ function App() {
             setShowNewAsset(true);
           }}
           onComplete={(roomsData) => {
-            setRooms(roomsData);
             if (assetData) {
               setAssetData({ ...assetData, rooms: roomsData });
               setShowNewAssetRooms(false);

@@ -1,10 +1,10 @@
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { ArrowLeft, Upload, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
+import { formatDate } from "@/lib/format";
+import { useFormat } from "@/components/format-provider";
 
 interface AssetPreviewProps {
   onBack: () => void;
@@ -43,6 +43,7 @@ interface AssetPreviewProps {
 export function AssetPreview({ onBack, onConfirm, assetData }: AssetPreviewProps) {
   const [isCreating, setIsCreating] = useState(false);
   const { toast } = useToast();
+  const { settings } = useFormat();
 
   const formatAddress = () => {
     const parts = [
@@ -253,7 +254,7 @@ export function AssetPreview({ onBack, onConfirm, assetData }: AssetPreviewProps
             {assetData.purchaseDate && (
               <div className="grid grid-cols-3">
                 <dt className="font-medium">Purchase Date</dt>
-                <dd className="col-span-2">{format(assetData.purchaseDate, "PPP")}</dd>
+                <dd className="col-span-2">{formatDate(assetData.purchaseDate, settings)}</dd>
               </div>
             )}
             {assetData.managementModel && (

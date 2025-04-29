@@ -100,8 +100,8 @@ export function Customers({ onNewCustomer }: CustomersProps) {
         status: customer.payer_type || 'N/A',
         nextActionDate: format(new Date(customer.created_at), 'PP'),
         user: {
-          name: customer.profiles?.full_name || 'Unknown',
-          image: `https://api.dicebear.com/7.x/initials/svg?seed=${customer.profiles?.full_name || 'Unknown'}`
+          name: (customer.profiles as any)?.full_name || 'Unknown',
+          image: `https://api.dicebear.com/7.x/initials/svg?seed=${(customer.profiles as any)?.full_name || 'Unknown'}`
         }
       }));
 

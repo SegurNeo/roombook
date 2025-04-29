@@ -30,7 +30,7 @@ interface ChartType {
   name: string;
   description: string;
   icon: React.ComponentType<any>;
-  preview: React.ComponentType<any>;
+  preview: () => JSX.Element;
 }
 
 const availableCharts: ChartType[] = [
@@ -298,13 +298,13 @@ export function Report() {
       
       setRentData(sampleData);
       
-      const total = sampleData.reduce((sum, item) => sum + item.rent, 0);
+      const total = sampleData.reduce((sum: number, item: { rent: number }) => sum + item.rent, 0);
       setTotalRevenue(total);
 
       const prevTotal = sampleData.slice(0, Math.floor(sampleData.length / 2))
-        .reduce((sum, item) => sum + item.rent, 0);
+        .reduce((sum: number, item: { rent: number }) => sum + item.rent, 0);
       const currentTotal = sampleData.slice(Math.floor(sampleData.length / 2))
-        .reduce((sum, item) => sum + item.rent, 0);
+        .reduce((sum: number, item: { rent: number }) => sum + item.rent, 0);
       const change = ((currentTotal - prevTotal) / prevTotal) * 100;
       setPercentageChange(change);
 
@@ -344,7 +344,7 @@ export function Report() {
     }
 
     if (timePeriod !== "week") {
-      const grouped = data.reduce((acc, item) => {
+      const grouped = data.reduce((acc: { [key: string]: { date: string; rent: number } }, item: { date: string; rent: number }) => {
         if (!acc[item.date]) {
           acc[item.date] = { date: item.date, rent: 0 };
         }
@@ -375,7 +375,7 @@ export function Report() {
     }
 
     if (timePeriod !== "week") {
-      const grouped = data.reduce((acc, item) => {
+      const grouped = data.reduce((acc: { [key: string]: { date: string; occupancy: number; count: number } }, item: { date: string; occupancy: number }) => {
         if (!acc[item.date]) {
           acc[item.date] = { date: item.date, occupancy: 0, count: 0 };
         }
@@ -384,7 +384,7 @@ export function Report() {
         return acc;
       }, {});
 
-      return Object.values(grouped).map(item => ({
+      return Object.values(grouped).map((item: { date: string; occupancy: number; count: number }) => ({
         date: item.date,
         occupancy: Math.round(item.occupancy / item.count)
       }));
@@ -669,7 +669,7 @@ export function Report() {
                     </p>
                     {selectedChartType === chart.id && (
                       <div className="mt-4 border rounded-lg p-4 bg-muted/50">
-                        <chart.preview />
+                        {chart.preview()}
                       </div>
                     )}
                   </div>
