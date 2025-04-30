@@ -241,12 +241,17 @@ export function Team() {
     if (!inviteToDelete) return;
 
     setIsSubmitting(true);
+    // Log the ID being targeted for deletion
+    console.log(`Attempting to delete invite with ID: ${inviteToDelete.id}`);
 
     try {
       const { error } = await supabase
         .from('team_invites')
         .delete()
         .eq('id', inviteToDelete.id);
+
+      // Log the error object, whether it's null or has content
+      console.log('Supabase delete response error:', error);
 
       if (error) throw error;
 
@@ -255,16 +260,22 @@ export function Team() {
         description: "The team invitation has been deleted",
       });
 
+      // Log before refreshing
+      console.log('Invite deleted successfully, calling fetchTeamAndOrg...');
       setShowDeleteInvite(false);
       setInviteToDelete(null);
       fetchTeamAndOrg(); // Refresh the list
     } catch (error: any) {
+      // Log the caught error
+      console.error('Error caught during invite deletion:', error);
       toast({
         title: "Error deleting invite",
         description: error.message,
         variant: "destructive"
       });
     } finally {
+      // Log when submission state changes
+      console.log('Setting isSubmitting to false.');
       setIsSubmitting(false);
     }
   };
