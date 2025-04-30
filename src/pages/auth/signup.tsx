@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,7 +21,15 @@ export function SignUp() {
   const location = useLocation();
   const { toast } = useToast();
 
-  const inviteToken = location.state?.inviteToken;
+  const invitedEmail = location.state?.invitedEmail;
+  const isEmailDisabled = !!invitedEmail;
+
+  useEffect(() => {
+    if (invitedEmail) {
+      setEmail(invitedEmail);
+      console.log('Pre-filling email from invite:', invitedEmail);
+    }
+  }, [invitedEmail]);
 
   const validatePassword = (password: string): boolean => {
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
@@ -80,18 +88,7 @@ export function SignUp() {
            description: "Please check your email to confirm your account.",
          });
 
-        if (inviteToken) {
-          // Store the token for later use after email confirmation/login
-          localStorage.setItem('pendingInviteToken', inviteToken);
-          console.log('Signup successful, invite token stored for later use:', inviteToken);
-          // Don't try to accept invite here, user needs to confirm email first.
-          // Navigate to a page indicating email verification is needed
-          // or just let them know via toast.
-         } 
-          // Redirect to a generic confirmation page or home, 
-          // login flow will handle invite acceptance.
-          // navigate("/auth/check-email"); // Or similar page
-         navigate("/auth/login", { replace: true, state: { email: email, needsVerification: true } }); // Redirect to login, maybe indicate verification needed
+        navigate("/auth/login", { replace: true, state: { email: email, needsVerification: true } });
 
       } else {
          toast({
@@ -205,12 +202,13 @@ export function SignUp() {
                 id="email"
                 name="email"
                 type="email"
-                placeholder="john@example.com"
+                placeholder={isEmailDisabled ? "" : "john@example.com"}
                 required
-                disabled={isLoading}
+                disabled={isEmailDisabled}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 title="Please enter a valid email address"
+                className={isEmailDisabled ? "bg-muted/50" : ""}
               />
             </div>
 
