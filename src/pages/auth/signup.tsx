@@ -81,29 +81,18 @@ export function SignUp() {
          });
 
         if (inviteToken) {
-          console.log('Signup successful, attempting to accept invite with token:', inviteToken);
-          const { error: inviteError } = await supabase.rpc('accept_team_invite', {
-             invite_token: inviteToken
-           });
-  
-           if (inviteError) {
-             console.error('Error accepting team invite post-signup:', inviteError);
-             toast({
-               title: "Invite Acceptance Issue",
-               description: `Signup successful, but failed to automatically accept the team invitation: ${inviteError.message}. You may need to accept it manually later or contact support.`, 
-               variant: "destructive",
-               duration: 10000, 
-             });
-           } else {
-             toast({
-               title: "Invite Accepted",
-               description: "You have successfully joined the team! Your account is ready.",
-             });
-           }
-           navigate("/", { replace: true, state: {} });
-         } else {
-            navigate("/auth/onboarding");
-         }
+          // Store the token for later use after email confirmation/login
+          localStorage.setItem('pendingInviteToken', inviteToken);
+          console.log('Signup successful, invite token stored for later use:', inviteToken);
+          // Don't try to accept invite here, user needs to confirm email first.
+          // Navigate to a page indicating email verification is needed
+          // or just let them know via toast.
+         } 
+          // Redirect to a generic confirmation page or home, 
+          // login flow will handle invite acceptance.
+          // navigate("/auth/check-email"); // Or similar page
+         navigate("/auth/login", { replace: true, state: { email: email, needsVerification: true } }); // Redirect to login, maybe indicate verification needed
+
       } else {
          toast({
             title: "Check Your Email",

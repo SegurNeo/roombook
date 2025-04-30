@@ -113,6 +113,10 @@ export function AcceptInvite() {
   const handleAuthRedirect = (mode: 'login' | 'signup') => {
     // Pass invite token to the auth page via state or query params
     // So after auth, it can complete the invite acceptance process
+    if (token) {
+      // Store in localStorage for OAuth callback to potentially pick up
+      localStorage.setItem('pendingInviteToken', token);
+    }
     navigate(`/auth/${mode}`, { state: { inviteToken: token } });
   };
 
