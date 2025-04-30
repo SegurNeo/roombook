@@ -21,6 +21,8 @@ export function SignUp() {
   const location = useLocation();
   const { toast } = useToast();
 
+  // Read invite details from location state
+  const inviteToken = location.state?.inviteToken;
   const invitedEmail = location.state?.invitedEmail;
   const isEmailDisabled = !!invitedEmail;
 
@@ -70,31 +72,41 @@ export function SignUp() {
     setIsLoading(true);
 
     try {
+      // Prepare options for signUp
+      const signUpOptions: { emailRedirectTo?: string; data?: { [key: string]: any } } = {};
+      if (inviteToken) {
+        // Redirect to complete-invite page after email verification
+        signUpOptions.emailRedirectTo = `${window.location.origin}/auth/complete-invite?token=${inviteToken}`;
+        console.log('Signup initiated with invite, setting emailRedirectTo:', signUpOptions.emailRedirectTo);
+      }
+      // Add full_name to user metadata
+      signUpOptions.data = { full_name: fullName }; 
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: {
-          data: {
-            full_name: fullName,
-          },
-        },
+        options: signUpOptions,
       });
 
       if (error) throw error;
 
-      if (data.user) {
-         toast({
-           title: "Signup Successful",
-           description: "Please check your email to confirm your account.",
-         });
-
-        navigate("/auth/login", { replace: true, state: { email: email, needsVerification: true } });
-
-      } else {
+      // Handle response (user needs to verify email)
+      if (!data.user) {
+         // This case might happen if email confirmation is disabled, but usually user object exists
          toast({
             title: "Check Your Email",
             description: "A confirmation link has been sent to your email address. Please verify your email to complete signup.",
           });
+         // Optionally navigate to a generic "check email" page or stay here
+         // navigate("/auth/check-email"); 
+      } else {
+         // Even if user object is returned, email verification is usually required
+          toast({
+            title: "Check Your Email",
+            description: "A confirmation link has been sent. Please verify your email.",
+          });
+         // No navigation needed here, user needs to check email.
+         // The redirect will happen *after* clicking the email link.
       }
 
     } catch (error: any) {

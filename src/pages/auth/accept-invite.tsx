@@ -111,18 +111,16 @@ export function AcceptInvite() {
   }, [token, toast]);
 
   const handleAuthRedirect = (mode: 'login' | 'signup') => {
-    // Pass invite token ONLY via localStorage
-    if (token) {
-      console.log('Storing invite token in localStorage:', token);
-      localStorage.setItem('pendingInviteToken', token);
-    }
-    // For signup, pass the invited email via state to pre-fill the form
-    if (mode === 'signup' && inviteDetails) {
-      navigate(`/auth/${mode}`, { state: { invitedEmail: inviteDetails.email } });
-    } else {
-      // For login, just navigate
-      navigate(`/auth/${mode}`);
-    }
+    // Remove localStorage logic
+    if (!token) return; // Should not happen if button is visible
+
+    // Pass the original invite token via state for the next step
+    const stateToPass = { 
+        inviteToken: token, 
+        ...(mode === 'signup' && inviteDetails && { invitedEmail: inviteDetails.email })
+    };
+    console.log(`Navigating to /auth/${mode} with state:`, stateToPass); // Log state
+    navigate(`/auth/${mode}`, { state: stateToPass });
   };
 
   const renderContent = () => {

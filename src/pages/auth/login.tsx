@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,9 +15,15 @@ export function Login() {
   const location = useLocation();
 
   const inviteToken = location.state?.inviteToken;
+  useEffect(() => {
+    if (inviteToken) {
+      console.log('Login page received inviteToken from state:', inviteToken);
+    }
+  }, [inviteToken]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    console.log("Login handleSubmit triggered");
     setIsLoading(true);
 
     const formData = new FormData(e.currentTarget);
@@ -25,66 +31,67 @@ export function Login() {
     const password = formData.get("password") as string;
 
     try {
+      const signInOptions: { redirectTo?: string; captchaToken?: string } = {};
+      if (inviteToken) {
+        signInOptions.redirectTo = `${window.location.origin}/auth/complete-invite?token=${inviteToken}`;
+        console.log('Login initiated with invite, setting redirectTo:', signInOptions.redirectTo);
+      }
+
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
+        options: signInOptions,
       });
 
       if (error) throw error;
 
-      if (data) {
-        toast({
-          title: "Welcome back!",
-          description: "You have successfully signed in.",
-        });
-
-        if (data.user && inviteToken) {
-          console.log('Login successful, attempting to accept invite with token:', inviteToken);
-          const { error: inviteError } = await supabase.rpc('accept_team_invite', {
-            invite_token: inviteToken
+      if (data?.user) {
+        if (!inviteToken) {
+          toast({
+            title: "Welcome back!",
+            description: "You have successfully signed in.",
           });
-
-          if (inviteError) {
-            console.error('Error accepting team invite:', inviteError);
-            toast({
-              title: "Invite Acceptance Issue",
-              description: `Login successful, but failed to automatically accept the team invitation: ${inviteError.message}. Please contact support or try accepting later.`,
-              variant: "destructive",
-              duration: 10000,
-            });
-          } else {
-            toast({
-              title: "Invite Accepted",
-              description: "You have successfully joined the team!",
-            });
-          }
-          navigate(location.pathname, { replace: true, state: {} });
+          navigate("/", { replace: true });
+        } else {
+          toast({ title: "Login successful", description: "Processing invitation..." });
         }
-
-        navigate("/");
       }
-    } catch (error) {
+    } catch (error: any) {
+      console.error("Supabase SignIn Error:", error);
       toast({
         title: "Error",
-        description: "Invalid email or password",
+        description: (error as Error).message || "Invalid email or password",
         variant: "destructive",
       });
     } finally {
+      console.log("Setting isLoading to false");
       setIsLoading(false);
     }
   };
 
   const handleGoogleSignIn = async () => {
     try {
+      const oauthOptions: { redirectTo?: string; queryParams?: { [key: string]: string } } = {
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent',
+        },
+      };
+      if (inviteToken) {
+        oauthOptions.redirectTo = `${window.location.origin}/auth/complete-invite?token=${inviteToken}`;
+        console.log('Google Sign-In initiated with invite, setting redirectTo:', oauthOptions.redirectTo);
+      }
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
+        options: oauthOptions,
       });
 
       if (error) throw error;
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "An error occurred while signing in with Google",
+        description: (error as Error).message || "An error occurred while signing in with Google",
         variant: "destructive",
       });
     }
