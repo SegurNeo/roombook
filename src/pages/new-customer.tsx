@@ -136,10 +136,44 @@ export function NewCustomer({ onBack, onComplete }: NewCustomerProps) {
 
       if (insertError) throw insertError;
 
+      // Invoke the Edge Function to create the Stripe customer
+      if (customer) { // Ensure we have the customer data returned
+        console.log('Invoking create-stripe-customer function for:', customer.id);
+        const { data: functionData, error: functionError } = await supabase.functions.invoke(
+          'create-stripe-customer',
+          {
+            body: { record: customer }, // Pass the newly created customer record
+          }
+        );
+
+        if (functionError) {
+          console.error('Error invoking create-stripe-customer function:', functionError);
+          // Optional: Show a specific toast, but the main success toast will still show
+          toast({
+            title: "Customer Sync Warning",
+            description: "Customer saved locally, but failed to sync with payment system. Please check Stripe or try configuring payment later.",
+            duration: 7000, // Longer duration for warning
+          });
+          // Decide if you want to throw the error here or let it continue
+          // throw functionError; // Uncomment this if sync failure should stop the flow
+        } else {
+          console.log('Stripe customer creation initiated/successful:', functionData);
+        }
+      } else {
+         console.warn('Customer data not available after insert, skipping Stripe sync.');
+         // Optionally show a warning toast here as well
+          toast({
+            title: "Customer Sync Skipped",
+            description: "Customer saved locally, but data wasn't immediately available to sync with payment system.",
+            duration: 7000,
+          });
+      }
+
       toast({
         title: "Customer created",
         description: "The customer has been successfully created.",
       });
+      setIsCreating(false);
 
       onComplete(customer);
     } catch (error: any) {
