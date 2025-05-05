@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Trash2, Pencil, ChevronLeft, ChevronRight, Plus, Eye } from "lucide-react";
+import { Trash2, Pencil, ChevronLeft, ChevronRight, Plus, Eye, CreditCard, Loader2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import type { ColumnOption } from "@/pages/customers";
 import { supabase } from "@/lib/supabase";
 import { useNavigate } from "react-router-dom";
+import { loadStripe, Stripe } from "@stripe/stripe-js";
 
 interface Customer {
   id: string;
@@ -37,6 +38,8 @@ const statusStyles = {
   'N/A': "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300",
 };
 
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '');
+
 export function CustomersTable({ customers, selectedColumns, columnOptions, onDelete, onNewCustomer }: CustomersTableProps) {
   const navigate = useNavigate();
   const [currentPage, setCurrentPage] = useState(1);
@@ -45,8 +48,13 @@ export function CustomersTable({ customers, selectedColumns, columnOptions, onDe
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [password, setPassword] = useState("");
   const { toast } = useToast();
+  const [configuringCustomerId, setConfiguringCustomerId] = useState<string | null>(null);
 
   const DELETE_PASSWORD = "delete123";
+
+  if (!import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY) {
+    console.error("Stripe publishable key not found. Please set VITE_STRIPE_PUBLISHABLE_KEY.");
+  }
 
   if (customers.length === 0) {
     return (
@@ -74,7 +82,7 @@ export function CustomersTable({ customers, selectedColumns, columnOptions, onDe
 
   const visibleColumns = columnOptions.filter(col => selectedColumns.includes(col.id));
 
-  const handleDeleteClick = async (customer: Customer) => {
+  const handleDeleteClick = (customer: Customer) => {
     setSelectedCustomer(customer);
     setDeleteDialogOpen(true);
   };
@@ -120,6 +128,54 @@ export function CustomersTable({ customers, selectedColumns, columnOptions, onDe
     }
   };
 
+  const handleConfigureSEPA = async (customer: Customer) => {
+    if (!customer.id) {
+        toast({ title: "Error", description: "Customer ID is missing.", variant: "destructive"});
+        return;
+    }
+    setConfiguringCustomerId(customer.id);
+
+    try {
+      console.log(`Requesting SEPA setup for Supabase customer ID: ${customer.id}`);
+      const { data, error: functionError } = await supabase.functions.invoke(
+        'create-sepa-setup-session',
+        { body: { supabase_customer_id: customer.id } }
+      );
+
+      if (functionError) {
+        throw new Error(functionError.message || "Failed to create SEPA setup session.");
+      }
+
+      const { sessionId } = data;
+      if (!sessionId) {
+        throw new Error("Checkout Session ID not received from function.");
+      }
+
+      console.log(`Received Stripe Checkout Session ID: ${sessionId}`);
+
+      const stripe = await stripePromise;
+      if (!stripe) {
+        throw new Error("Stripe.js failed to load.");
+      }
+
+      const { error: redirectError } = await stripe.redirectToCheckout({ sessionId });
+
+      if (redirectError) {
+        console.error("Stripe redirection error:", redirectError);
+        throw new Error(redirectError.message || "Failed to redirect to Stripe.");
+      }
+
+    } catch (error: any) {
+      console.error("Error during SEPA configuration:", error);
+      toast({
+        title: "SEPA Setup Error",
+        description: error.message || "Could not initiate SEPA configuration. Please try again.",
+        variant: "destructive",
+      });
+       setConfiguringCustomerId(null);
+    }
+  };
+
   const renderCell = (customer: Customer, columnId: string) => {
     switch (columnId) {
       case "name":
@@ -147,7 +203,9 @@ export function CustomersTable({ customers, selectedColumns, columnOptions, onDe
       case "nextActionDate":
         return <TableCell>{customer.nextActionDate}</TableCell>;
       default:
-        return <TableCell>-</TableCell>;
+        const col = columnOptions.find(c => c.id === columnId);
+        const value = customer[columnId as keyof Customer] ?? '-';
+        return <TableCell>{col ? value : '-'}</TableCell>;
     }
   };
 
@@ -171,19 +229,33 @@ export function CustomersTable({ customers, selectedColumns, columnOptions, onDe
                   <div className="flex items-center space-x-2">
                     <Button
                       variant="secondary"
-                      size="sm"
+                      size="icon"
                       onClick={() => navigate(`/customers/${customer.id}`)}
+                      title="View Details"
                     >
                       <Eye className="h-4 w-4" />
                     </Button>
-                    <Button variant="secondary" size="sm">
+                    <Button variant="secondary" size="icon" title="Edit Customer" disabled>
                       <Pencil className="h-4 w-4" />
-                      <span className="ml-2">Edit</span>
                     </Button>
-                    <Button 
-                      variant="secondary" 
-                      size="sm"
+                    <Button
+                      variant="secondary"
+                      size="icon"
+                      onClick={() => handleConfigureSEPA(customer)}
+                      disabled={configuringCustomerId === customer.id}
+                      title="Configure SEPA Direct Debit"
+                    >
+                      {configuringCustomerId === customer.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                          <CreditCard className="h-4 w-4" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="icon"
                       onClick={() => handleDeleteClick(customer)}
+                      title="Delete Customer"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
