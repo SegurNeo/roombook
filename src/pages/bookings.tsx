@@ -12,10 +12,9 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
 import { Loader2 } from "lucide-react";
 import { UserFilter } from "@/components/user-filter";
+import { NewBooking } from "./new-booking";
 
-interface BookingsProps {
-  onNewBooking: () => void;
-}
+interface BookingsProps { }
 
 export interface ColumnOption {
   id: string;
@@ -34,7 +33,7 @@ const columnOptions: ColumnOption[] = [
   { id: "user", label: "Created by" },
 ];
 
-export function Bookings({ onNewBooking }: BookingsProps) {
+export function Bookings({ }: BookingsProps) {
   const [showFilters, setShowFilters] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showColumnSelector, setShowColumnSelector] = useState(false);
@@ -55,10 +54,13 @@ export function Bookings({ onNewBooking }: BookingsProps) {
   const [loading, setLoading] = useState(true);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const { toast } = useToast();
+  const [showNewBookingForm, setShowNewBookingForm] = useState(false);
 
   useEffect(() => {
-    fetchBookings();
-  }, [selectedUserId]);
+    if (!showNewBookingForm) {
+       fetchBookings();
+    }
+  }, [selectedUserId, showNewBookingForm]);
 
   const fetchBookings = async () => {
     try {
@@ -182,6 +184,18 @@ export function Bookings({ onNewBooking }: BookingsProps) {
     return "Custom range";
   };
 
+  if (showNewBookingForm) {
+      return (
+          <NewBooking
+              onBack={() => setShowNewBookingForm(false)}
+              onComplete={(bookingData) => {
+                  console.log('New booking created:', bookingData);
+                  setShowNewBookingForm(false);
+              }}
+          />
+      );
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -197,7 +211,7 @@ export function Bookings({ onNewBooking }: BookingsProps) {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-3xl font-bold tracking-tight">Bookings</h2>
-        <Button onClick={onNewBooking}>
+        <Button onClick={() => setShowNewBookingForm(true)}>
           <Plus className="mr-2 h-4 w-4" /> Add booking
         </Button>
       </div>
@@ -271,7 +285,6 @@ export function Bookings({ onNewBooking }: BookingsProps) {
         bookings={bookings} 
         selectedColumns={selectedColumns} 
         columnOptions={columnOptions}
-        onNewBooking={onNewBooking}
       />
 
       <Dialog open={showDatePicker} onOpenChange={handleDatePickerClose}>

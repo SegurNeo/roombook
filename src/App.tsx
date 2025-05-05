@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Sidebar } from './components/sidebar';
 import { Assets } from './pages/assets';
 import { Customers } from './pages/customers';
@@ -12,8 +12,6 @@ import { NewAssetRooms } from './pages/new-asset-rooms';
 import { AssetPreview } from './pages/asset-preview';
 import { AssetDetails } from './pages/asset-details';
 import { CustomerDetails } from './pages/customer-details';
-import { NewCustomer } from './pages/new-customer';
-import { NewBooking } from './pages/new-booking';
 import { RentCheck } from './pages/rent-check';
 import { SignUp } from './pages/auth/signup';
 import { Login } from './pages/auth/login';
@@ -23,9 +21,11 @@ import { Onboarding } from './pages/auth/onboarding';
 import { Team } from './pages/team';
 import { AcceptInvite } from './pages/auth/accept-invite';
 import { CompleteInvite } from './pages/auth/complete-invite';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Toaster } from "@/components/ui/toaster";
 import { FormatProvider } from '@/components/format-provider';
+import { supabase } from './lib/supabase';
+import { useToast } from './hooks/use-toast';
 
 interface Address {
   street: string;
@@ -48,6 +48,7 @@ interface Room {
 }
 
 interface AssetData {
+  name: string;
   address: Address;
   reference?: string;
   rooms: Room[];
@@ -62,146 +63,135 @@ interface AssetData {
 }
 
 function App() {
-  const [currentPage, setCurrentPage] = useState('assets');
   const [showNewAsset, setShowNewAsset] = useState(false);
   const [showNewAssetRooms, setShowNewAssetRooms] = useState(false);
   const [showAssetPreview, setShowAssetPreview] = useState(false);
-  const [showNewCustomer, setShowNewCustomer] = useState(false);
-  const [showNewBooking, setShowNewBooking] = useState(false);
-  const [totalRooms, setTotalRooms] = useState(0);
   const [assetData, setAssetData] = useState<AssetData | null>(null);
+  const [totalRooms, setTotalRooms] = useState(0);
+  const [session, setSession] = useState<any>(null);
+  const [loadingAuth, setLoadingAuth] = useState(true);
+  const { toast } = useToast();
 
-  const renderDashboard = () => {
-    if (showAssetPreview && assetData) {
-      return (
-        <AssetPreview
-          onBack={() => {
-            setShowAssetPreview(false);
-            setShowNewAssetRooms(true);
-          }}
-          onConfirm={() => {
-            setShowAssetPreview(false);
-            setShowNewAsset(false);
-            setShowNewAssetRooms(false);
-            setCurrentPage('assets');
-            setAssetData(null);
-          }}
-          assetData={assetData}
-        />
-      );
-    }
+  useEffect(() => {
+    const getSession = async () => {
+        setLoadingAuth(true);
+        try {
+            const { data: { session }, error } = await supabase.auth.getSession();
+            if (error) throw error;
+            setSession(session);
+        } catch (error: any) {
+            toast({ title: "Auth Error", description: `Failed to get session: ${error.message}`, variant: "destructive"});
+            console.error("Auth error:", error);
+            setSession(null);
+        } finally {
+            setLoadingAuth(false);
+        }
+    };
 
-    if (showNewAssetRooms) {
-      return (
-        <NewAssetRooms
-          onBack={() => {
-            setShowNewAssetRooms(false);
-            setShowNewAsset(true);
-          }}
-          onComplete={(roomsData) => {
-            if (assetData) {
-              setAssetData({ ...assetData, rooms: roomsData });
-              setShowNewAssetRooms(false);
-              setShowAssetPreview(true);
-            }
-          }}
-          totalRooms={totalRooms}
-        />
-      );
-    }
+    getSession();
 
-    if (showNewAsset) {
-      return (
-        <NewAsset
-          onBack={() => setShowNewAsset(false)}
-          onContinue={(data, numberOfRooms) => {
-            setAssetData(data);
-            setTotalRooms(numberOfRooms);
-            setShowNewAsset(false);
-            setShowNewAssetRooms(true);
-          }}
-        />
-      );
-    }
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log("Auth State Change:", _event, session ? 'Got session' : 'No session');
+      setSession(session);
+    });
 
-    if (showNewCustomer) {
-      return (
-        <NewCustomer
-          onBack={() => setShowNewCustomer(false)}
-          onComplete={(customerData) => {
-            console.log('New customer data:', customerData);
-            setShowNewCustomer(false);
-            setCurrentPage('customers');
-          }}
-        />
-      );
-    }
+    return () => {
+      authListener?.subscription.unsubscribe();
+    };
+  }, [toast]);
 
-    if (showNewBooking) {
-      return (
-        <NewBooking
-          onBack={() => setShowNewBooking(false)}
-          onComplete={(bookingData) => {
-            console.log('New booking data:', bookingData);
-            setShowNewBooking(false);
-            setCurrentPage('bookings');
-          }}
-        />
-      );
-    }
-
-    switch (currentPage) {
-      case 'notifications':
-        return <Notifications />;
-      case 'report':
-        return <Report />;
-      case 'assets':
-        return <Assets onNewAsset={() => setShowNewAsset(true)} />;
-      case 'customers':
-        return <Customers onNewCustomer={() => setShowNewCustomer(true)} />;
-      case 'bookings':
-        return <Bookings onNewBooking={() => setShowNewBooking(true)} />;
-      case 'rent-check':
-        return <RentCheck />;
-      case 'settings':
-        return <Settings />;
-      case 'profile':
-        return <Profile />;
-      case 'team':
-        return <Team />;
-      default:
-        return <Assets onNewAsset={() => setShowNewAsset(true)} />;
-    }
+  const handleNewAssetComplete = () => {
+      setShowAssetPreview(false);
+      setShowNewAsset(false);
+      setShowNewAssetRooms(false);
+      setAssetData(null);
   };
+
+  if (loadingAuth) {
+     return (
+        <div className="flex items-center justify-center h-screen">
+          <div>Loading session...</div>
+        </div>
+     );
+  }
 
   return (
     <Router>
       <FormatProvider>
-        <Routes>
-          <Route path="/auth/signup" element={<SignUp />} />
-          <Route path="/auth/login" element={<Login />} />
-          <Route path="/auth/callback" element={<AuthCallback />} />
-          <Route path="/auth/confirm-email" element={<ConfirmEmail />} />
-          <Route path="/auth/onboarding" element={<Onboarding />} />
-          <Route path="/accept-invite" element={<AcceptInvite />} />
-          <Route path="/auth/complete-invite" element={<CompleteInvite />} />
-          <Route
-            path="/*"
-            element={
-              <div className="min-h-screen flex bg-background">
-                <Sidebar currentPage={currentPage} setCurrentPage={setCurrentPage} />
-                <main className="flex-1 overflow-y-auto p-8">
-                  <Routes>
-                    <Route path="/assets/:id" element={<AssetDetails />} />
-                    <Route path="/customers/:id" element={<CustomerDetails />} />
-                    <Route path="/" element={renderDashboard()} />
-                  </Routes>
-                </main>
-                <Toaster />
-              </div>
-            }
-          />
-        </Routes>
+          <Routes>
+              <Route path="/auth/signup" element={<SignUp />} />
+              <Route path="/auth/login" element={<Login />} />
+              <Route path="/auth/callback" element={<AuthCallback />} />
+              <Route path="/auth/confirm-email" element={<ConfirmEmail />} />
+              <Route path="/auth/onboarding" element={<Onboarding />} />
+              <Route path="/accept-invite" element={<AcceptInvite />} />
+              <Route path="/auth/complete-invite" element={<CompleteInvite />} />
+
+              <Route
+                path="/*"
+                element={
+                  !session ? (
+                     <Navigate to="/auth/login" replace />
+                   ) : (
+                     <div className="min-h-screen flex bg-background">
+                       <Sidebar />
+                       <main className="flex-1 overflow-y-auto p-8">
+                           {showNewAsset && !showNewAssetRooms && !showAssetPreview && (
+                                <NewAsset
+                                    onBack={() => setShowNewAsset(false)}
+                                    onContinue={(data, numberOfRooms) => {
+                                        setAssetData(data);
+                                        setTotalRooms(numberOfRooms);
+                                        setShowNewAsset(false);
+                                        setShowNewAssetRooms(true);
+                                    }}
+                                />
+                           )}
+                           {showNewAssetRooms && !showAssetPreview && (
+                               <NewAssetRooms
+                                  onBack={() => {setShowNewAssetRooms(false); setShowNewAsset(true);}}
+                                  onComplete={(roomsData) => {
+                                    if (assetData) {
+                                        setAssetData({ ...assetData, rooms: roomsData });
+                                        setShowNewAssetRooms(false);
+                                        setShowAssetPreview(true);
+                                    }
+                                  }}
+                                  totalRooms={totalRooms}
+                               />
+                           )}
+                           {showAssetPreview && assetData && (
+                               <AssetPreview
+                                  onBack={() => {setShowAssetPreview(false); setShowNewAssetRooms(true);}}
+                                  onConfirm={handleNewAssetComplete}
+                                  assetData={assetData}
+                               />
+                           )}
+
+                           {!showNewAsset && !showNewAssetRooms && !showAssetPreview && (
+                               <Routes>
+                                  <Route path="/assets/:id" element={<AssetDetails />} />
+                                  <Route path="/customers/:id" element={<CustomerDetails />} />
+                                  <Route path="/assets" element={<Assets onNewAsset={() => setShowNewAsset(true)} />} />
+                                  <Route path="/customers" element={<Customers />} />
+                                  <Route path="/bookings" element={<Bookings />} />
+                                  <Route path="/rent-check" element={<RentCheck />} />
+                                  <Route path="/settings" element={<Settings />} />
+                                  <Route path="/profile" element={<Profile />} />
+                                  <Route path="/team" element={<Team />} />
+                                  <Route path="/notifications" element={<Notifications />} />
+                                  <Route path="/report" element={<Report />} />
+                                  <Route path="/" element={<Navigate to="/assets" replace />} />
+                                  <Route path="*" element={<div>404 Not Found</div>} />
+                               </Routes>
+                           )}
+                       </main>
+                       <Toaster />
+                     </div>
+                   )
+                }
+              />
+          </Routes>
       </FormatProvider>
     </Router>
   );

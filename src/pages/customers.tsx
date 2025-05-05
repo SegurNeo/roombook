@@ -12,10 +12,9 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
 import { Loader2 } from "lucide-react";
 import { UserFilter } from "@/components/user-filter";
+import { NewCustomer } from "./new-customer";
 
-interface CustomersProps {
-  onNewCustomer: () => void;
-}
+interface CustomersProps { }
 
 export interface ColumnOption {
   id: string;
@@ -33,7 +32,7 @@ const columnOptions: ColumnOption[] = [
   { id: "user", label: "Created by" },
 ];
 
-export function Customers({ onNewCustomer }: CustomersProps) {
+export function Customers({ }: CustomersProps) {
   const [showFilters, setShowFilters] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showColumnSelector, setShowColumnSelector] = useState(false);
@@ -54,10 +53,13 @@ export function Customers({ onNewCustomer }: CustomersProps) {
   const [loading, setLoading] = useState(true);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const { toast } = useToast();
+  const [showNewCustomerForm, setShowNewCustomerForm] = useState(false);
 
   useEffect(() => {
-    fetchCustomers();
-  }, [selectedUserId]);
+    if (!showNewCustomerForm) {
+       fetchCustomers();
+    }
+  }, [selectedUserId, showNewCustomerForm]);
 
   const fetchCustomers = async () => {
     try {
@@ -176,6 +178,18 @@ export function Customers({ onNewCustomer }: CustomersProps) {
     fetchCustomers();
   };
 
+  if (showNewCustomerForm) {
+      return (
+          <NewCustomer
+              onBack={() => setShowNewCustomerForm(false)}
+              onComplete={(customerData) => {
+                  console.log('New customer created:', customerData);
+                  setShowNewCustomerForm(false);
+              }}
+          />
+      );
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -191,7 +205,7 @@ export function Customers({ onNewCustomer }: CustomersProps) {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-3xl font-bold tracking-tight">Customers</h2>
-        <Button onClick={onNewCustomer}>
+        <Button onClick={() => setShowNewCustomerForm(true)}>
           <Plus className="mr-2 h-4 w-4" /> Add customer
         </Button>
       </div>
@@ -265,7 +279,6 @@ export function Customers({ onNewCustomer }: CustomersProps) {
         selectedColumns={selectedColumns} 
         columnOptions={columnOptions}
         onDelete={handleDelete}
-        onNewCustomer={onNewCustomer}
       />
 
       <Dialog open={showDatePicker} onOpenChange={handleDatePickerClose}>
