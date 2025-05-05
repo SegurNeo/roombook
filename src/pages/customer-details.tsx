@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -57,9 +57,30 @@ export function CustomerDetails() {
   const { settings } = useFormat();
   const [customer, setCustomer] = useState<CustomerDetails | null>(null);
   const [loading, setLoading] = useState(true);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   useEffect(() => {
     fetchCustomerDetails();
+
+    const mandateStatus = searchParams.get('mandate_setup');
+    if (mandateStatus) {
+      if (mandateStatus === 'success') {
+        toast({
+          title: "Mandate Setup Initiated",
+          description: "Stripe is processing the mandate setup. The status will update shortly.",
+          duration: 7000,
+        });
+      } else if (mandateStatus === 'cancel') {
+        toast({
+          title: "Mandate Setup Cancelled",
+          description: "The mandate setup process was cancelled.",
+          variant: "default",
+        });
+      }
+      searchParams.delete('mandate_setup');
+      setSearchParams(searchParams, { replace: true });
+    }
+
   }, [id]);
 
   const fetchCustomerDetails = async () => {
@@ -118,15 +139,18 @@ export function CustomerDetails() {
     );
   }
 
-  if (!customer) {
+  if (!customer && !loading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center space-y-4">
-          <p className="text-lg font-medium">Customer not found</p>
-          <Button onClick={() => navigate('/customers')}>Back to customers</Button>
-        </div>
+      <div className="flex flex-col items-center justify-center h-full text-center space-y-4 p-4">
+         <h3 className="text-xl font-semibold">Customer Not Found</h3>
+         <p className="text-muted-foreground">The customer with ID '{id}' could not be loaded.</p>
+        <Button onClick={() => navigate('/customers')}>Back to customers</Button>
       </div>
     );
+  }
+
+  if (!customer) {
+    return null;
   }
 
   return (
