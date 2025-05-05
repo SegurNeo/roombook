@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import type { ColumnOption } from "@/pages/customers";
 import { supabase } from "@/lib/supabase";
 import { useNavigate } from "react-router-dom";
-import { loadStripe, Stripe } from "@stripe/stripe-js";
+import { loadStripe } from "@stripe/stripe-js";
 
 interface Customer {
   id: string;
