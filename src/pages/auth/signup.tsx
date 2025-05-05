@@ -39,8 +39,12 @@ export function SignUp() {
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
+    console.log('handleSubmit called');
     event.preventDefault();
 
+    console.log('Password:', password);
+    console.log('Confirm Password:', confirmPassword);
+    console.log('Passwords match?:', password === confirmPassword);
     if (password !== confirmPassword) {
       toast({
         title: "Password Mismatch",
@@ -50,7 +54,9 @@ export function SignUp() {
       return;
     }
 
-    if (!validatePassword(password)) {
+    const isPasswordValid = validatePassword(password);
+    console.log('Password valid?:', isPasswordValid);
+    if (!isPasswordValid) {
        toast({
          title: "Weak Password",
          description: "Password must be at least 8 characters long and include uppercase, lowercase, number, and special character.",
@@ -60,6 +66,7 @@ export function SignUp() {
        return;
      }
 
+    console.log('Agreed to terms?:', agreedToTerms);
     if (!agreedToTerms) {
       toast({
         title: "Terms Not Agreed",
@@ -69,6 +76,7 @@ export function SignUp() {
       return;
     }
 
+    console.log('All validations passed, setting loading...');
     setIsLoading(true);
 
     try {
