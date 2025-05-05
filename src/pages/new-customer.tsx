@@ -136,54 +136,79 @@ export function NewCustomer({ onBack, onComplete }: NewCustomerProps) {
 
       if (insertError) throw insertError;
 
-      // Invoke the Edge Function to create the Stripe customer
-      if (customer) { // Ensure we have the customer data returned
-        console.log('Invoking create-stripe-customer function for:', customer.id);
-        const { data: functionData, error: functionError } = await supabase.functions.invoke(
-          'create-stripe-customer',
-          {
-            body: { record: customer }, // Pass the newly created customer record
-          }
-        );
-
-        if (functionError) {
-          console.error('Error invoking create-stripe-customer function:', functionError);
-          // Optional: Show a specific toast, but the main success toast will still show
-          toast({
-            title: "Customer Sync Warning",
-            description: "Customer saved locally, but failed to sync with payment system. Please check Stripe or try configuring payment later.",
-            duration: 7000, // Longer duration for warning
-          });
-          // Decide if you want to throw the error here or let it continue
-          // throw functionError; // Uncomment this if sync failure should stop the flow
-        } else {
-          console.log('Stripe customer creation initiated/successful:', functionData);
-        }
-      } else {
+      // --- Handle case where customer data isn't returned ---
+      if (!customer) {
          console.warn('Customer data not available after insert, skipping Stripe sync.');
-         // Optionally show a warning toast here as well
-          toast({
+         toast({
             title: "Customer Sync Skipped",
-            description: "Customer saved locally, but data wasn't immediately available to sync with payment system.",
+            description: "Customer saved locally, but data wasn't immediately available to sync.",
             duration: 7000,
-          });
+         });
+         // Show main toast but indicate skipped sync
+         toast({
+            title: "Customer Created (Sync Skipped)",
+            description: "The customer data was not returned properly after saving.",
+         });
+         // Don't call onComplete if customer is null? Or call with null? Assuming don't call.
+         // setIsCreating(false); // Will be handled by finally
+         return; // Exit handleSubmit early
       }
 
-      toast({
-        title: "Customer created",
-        description: "The customer has been successfully created.",
-      });
-      setIsCreating(false);
+      // --- Try invoking the Stripe Sync function ---
+      let functionSucceeded = false;
+      try {
+          console.log('Invoking create-stripe-customer function for:', customer.id); // Keep this log
+          const { data: functionData, error: functionError } = await supabase.functions.invoke(
+            'create-stripe-customer',
+            { body: { record: customer } } // Pass the newly created customer record
+          );
 
-      onComplete(customer);
-    } catch (error: any) {
-      console.error('Error creating customer:', error);
+          if (functionError) {
+            // Error returned FROM the function execution
+            console.error('Error returned from create-stripe-customer function:', functionError);
+            toast({
+              title: "Customer Sync Warning",
+              description: `Customer saved, but sync failed: ${functionError.message || 'Unknown error'}. Check logs or Stripe.`,
+              duration: 7000,
+            });
+            // functionSucceeded remains false
+          } else {
+            // Function invoked and executed successfully (doesn't mean Stripe update worked yet, but call succeeded)
+            console.log('Stripe customer creation function invoked successfully:', functionData);
+            functionSucceeded = true;
+          }
+      } catch (invokeError: any) {
+          // Catch errors DURING the invoke call itself (e.g., network error, function not found)
+          console.error('Fatal error calling supabase.functions.invoke:', invokeError);
+          toast({
+              title: "Error During Sync Call",
+              description: `Failed to call the sync function: ${invokeError.message || 'Unknown error'}. Customer saved locally.`,
+              variant: "destructive",
+          });
+          // functionSucceeded remains false
+      }
+
+      // --- Post-invocation Actions ---
+      // Show a final combined toast
       toast({
-        title: "Error creating customer",
-        description: error.message || "Failed to create customer. Please try again.",
+        title: functionSucceeded ? "Customer Created & Sync Initiated" : "Customer Created (Sync Issue)",
+        description: functionSucceeded ? "The customer has been saved and sync with payment system started." : "Customer saved locally, but sync with payment system encountered an issue.",
+      });
+
+      // Call onComplete *after* the function invocation attempt
+      onComplete(customer);
+
+    } catch (error: any) { // Main catch block for insert errors, auth errors etc.
+      console.error('Error during customer creation process:', error);
+      toast({
+        title: "Error Creating Customer",
+        description: error.message || "An unexpected error occurred. Please try again.",
         variant: "destructive",
       });
-      setIsCreating(false);
+      // No need to call onComplete here if the initial save failed
+    } finally {
+        // Use finally to ensure isCreating is always reset, regardless of success or failure path
+        setIsCreating(false);
     }
   };
 
