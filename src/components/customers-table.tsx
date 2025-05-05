@@ -13,6 +13,7 @@ import type { ColumnOption } from "@/pages/customers";
 import { supabase } from "@/lib/supabase";
 import { useNavigate } from "react-router-dom";
 import { loadStripe } from "@stripe/stripe-js";
+import React from "react";
 
 interface Customer {
   id: string;
@@ -22,6 +23,10 @@ interface Customer {
   phone: string;
   status: string;
   nextActionDate: string;
+  user: {
+    name: string;
+    image: string;
+  };
 }
 
 interface CustomersTableProps {
@@ -202,10 +207,21 @@ export function CustomersTable({ customers, selectedColumns, columnOptions, onDe
         );
       case "nextActionDate":
         return <TableCell>{customer.nextActionDate}</TableCell>;
+      case "user":
+        if (customer.user && typeof customer.user.name === 'string') {
+          return <TableCell>{customer.user.name}</TableCell>;
+        } else {
+          console.warn(`Malformed user data for customer ${customer.id}:`, customer.user);
+          return <TableCell>-</TableCell>;
+        }
       default:
         const col = columnOptions.find(c => c.id === columnId);
-        const value = customer[columnId as keyof Customer] ?? '-';
-        return <TableCell>{col ? value : '-'}</TableCell>;
+        let value = customer[columnId as keyof Customer] ?? '-';
+        if (typeof value === 'object' && value !== null && !React.isValidElement(value)) {
+          console.warn(`Rendering unexpected object for column ${columnId}, customer ${customer.id}:`, value);
+          value = '[Object]';
+        }
+        return <TableCell>{col ? String(value) : '-'}</TableCell>;
     }
   };
 
