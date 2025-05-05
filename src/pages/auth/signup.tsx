@@ -58,10 +58,10 @@ export function SignUp() {
     console.log('Password valid?:', isPasswordValid);
     if (!isPasswordValid) {
        toast({
-         title: "Weak Password",
-         description: "Password must be at least 8 characters long and include uppercase, lowercase, number, and special character.",
+         title: "Contraseña Débil",
+         description: "La contraseña debe tener al menos 8 caracteres e incluir mayúscula, minúscula, número y carácter especial (@$!%*?&).",
          variant: "destructive",
-         duration: 7000,
+         duration: 9000,
        });
        return;
      }
@@ -82,40 +82,36 @@ export function SignUp() {
     try {
       // Prepare options for signUp
       const signUpOptions: { emailRedirectTo?: string; data?: { [key: string]: any } } = {};
-      if (inviteToken) {
-        // Redirect to complete-invite page after email verification
-        signUpOptions.emailRedirectTo = `${window.location.origin}/auth/complete-invite?token=${inviteToken}`;
-        console.log('Signup initiated with invite, setting emailRedirectTo:', signUpOptions.emailRedirectTo);
-      }
+      // REMOVED emailRedirectTo logic
+      // if (inviteToken) {
+      //   // Redirect to complete-invite page after email verification
+      //   signUpOptions.emailRedirectTo = `${window.location.origin}/auth/complete-invite?token=${inviteToken}`;
+      //   console.log('Signup initiated with invite, setting emailRedirectTo:', signUpOptions.emailRedirectTo);
+      // }
+      
       // Add full_name to user metadata
       signUpOptions.data = { full_name: fullName }; 
 
-      const { data, error } = await supabase.auth.signUp({
+      const { error } = await supabase.auth.signUp({
         email,
         password,
-        options: signUpOptions,
+        options: signUpOptions, // Options now only contain metadata
       });
 
       if (error) throw error;
 
-      // Handle response (user needs to verify email)
-      if (!data.user) {
-         // This case might happen if email confirmation is disabled, but usually user object exists
-         toast({
-            title: "Check Your Email",
-            description: "A confirmation link has been sent to your email address. Please verify your email to complete signup.",
-          });
-         // Optionally navigate to a generic "check email" page or stay here
-         // navigate("/auth/check-email"); 
-      } else {
-         // Even if user object is returned, email verification is usually required
-          toast({
-            title: "Check Your Email",
-            description: "A confirmation link has been sent. Please verify your email.",
-          });
-         // No navigation needed here, user needs to check email.
-         // The redirect will happen *after* clicking the email link.
-      }
+      // Handle response - User needs to verify email via OTP
+      toast({
+        title: "Revisa tu correo electrónico",
+        description: "Hemos enviado un código de verificación. Por favor, introdúcelo en la siguiente pantalla.",
+        duration: 7000, // Give user time to read
+      });
+
+      // Store email for verification screen and navigate
+      sessionStorage.setItem('verificationEmail', email);
+      const stateToPass = inviteToken ? { inviteToken } : undefined;
+      console.log('Navigating to confirm-email with state:', stateToPass);
+      navigate('/auth/confirm-email', { state: stateToPass });
 
     } catch (error: any) {
       console.error("Signup error:", error);

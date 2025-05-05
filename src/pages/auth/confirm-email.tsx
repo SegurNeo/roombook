@@ -1,17 +1,20 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Mail, Loader2, CheckCircle2, XCircle } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
 
 export function ConfirmEmail() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationStatus, setVerificationStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [code, setCode] = useState("");
   const [email, setEmail] = useState<string | null>(null);
+
+  const inviteToken = location.state?.inviteToken;
 
   useEffect(() => {
     const verificationEmail = sessionStorage.getItem('verificationEmail');
@@ -47,7 +50,14 @@ export function ConfirmEmail() {
           description: "Your account has been successfully verified.",
         });
         sessionStorage.removeItem('verificationEmail');
-        navigate("/auth/onboarding");
+
+        if (inviteToken) {
+          console.log('OTP verified, invite token found, navigating to complete-invite');
+          navigate(`/auth/complete-invite?token=${inviteToken}`, { replace: true });
+        } else {
+          console.log('OTP verified, no invite token, navigating to onboarding');
+          navigate("/auth/onboarding");
+        }
       }
     } catch (error: any) {
       setVerificationStatus('error');
