@@ -295,21 +295,25 @@ export function SignUp() {
                 onCheckedChange={(checked) => setAgreedToTerms(Boolean(checked))}
                 disabled={isLoading}
               >
-                I agree to the{" "}
-                <Link to="/terms" className="text-sm text-primary">
-                  terms and conditions
+                Acepto los{" "}
+                <Link to="/terms" className="text-sm text-primary hover:underline">
+                  términos y condiciones
                 </Link>
               </Checkbox>
             </div>
 
-            <Button className="w-full" type="submit" disabled={isLoading}>
+            <Button 
+              className="w-full" 
+              type="submit" 
+              disabled={isLoading || !agreedToTerms}
+            >
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Creating account...
+                  Creando cuenta...
                 </>
               ) : (
-                "Create account"
+                "Crear cuenta"
               )}
             </Button>
           </form>
