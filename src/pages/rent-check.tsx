@@ -119,6 +119,8 @@ export function RentCheck() {
         query = query.filter('bookings.payment_collection_method', 'eq', collectionMethodFilter);
       }
 
+      console.log("Rent-Check - Current collectionMethodFilter:", collectionMethodFilter);
+
       // Apply time period filter
       const today = new Date();
       switch (timePeriod) {
