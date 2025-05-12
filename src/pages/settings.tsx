@@ -1,19 +1,25 @@
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Upload, Plus, FileText, Globe, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Upload, Plus, FileText, Globe, Loader2, ChevronLeft, ChevronRight, CreditCard, AlertCircle, CheckCircle2, ExternalLink } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useNavigate } from "react-router-dom";
 
-interface Settings {
+type StripeConnectStatus = "not_connected" | "pending_verification" | "active" | "restricted" | "error";
+interface PayoutAccountDetails {
+  last4?: string;
+  bankName?: string;
+}
+
+interface SettingsData {
   language: string;
   region: string;
   currency: string;
@@ -39,7 +45,7 @@ export function Settings() {
   const [servicesPageSize, setServicesPageSize] = useState(5);
   const [totalServices, setTotalServices] = useState(0);
   const [organizationId, setOrganizationId] = useState<string | null>(null);
-  const [settings, setSettings] = useState<Settings>({
+  const [currentSettings, setCurrentSettings] = useState<SettingsData>({
     language: 'en',
     region: 'eu',
     currency: 'eur',
@@ -50,59 +56,47 @@ export function Settings() {
   const [isApplyingSettings, setIsApplyingSettings] = useState(false);
   const { toast } = useToast();
 
+  const [connectAccountStatus, setConnectAccountStatus] = useState<StripeConnectStatus>("not_connected");
+  const [accountDetails, setAccountDetails] = useState<PayoutAccountDetails | null>(null);
+  const [isLoadingPayouts, setIsLoadingPayouts] = useState(true);
+  const [isConnectingStripe, setIsConnectingStripe] = useState(false);
+
   useEffect(() => {
-    // Check authentication status and get organization ID
     const checkAuth = async () => {
       try {
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
         if (sessionError) throw sessionError;
-        
         if (!session) {
-          // No session found, redirect to login
           navigate("/auth/login");
           return;
         }
-
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('organization_id')
           .eq('id', session.user.id)
           .single();
-
         if (profileError) throw profileError;
-        
         if (!profile?.organization_id) {
-          // User has no organization, redirect to onboarding
           navigate("/auth/onboarding");
           return;
         }
-
         setOrganizationId(profile.organization_id);
-
-        // Load saved settings
         const { data: orgSettings, error: settingsError } = await supabase
           .from('organizations')
           .select('settings')
           .eq('id', profile.organization_id)
           .single();
-
         if (!settingsError && orgSettings?.settings) {
-          setSettings(orgSettings.settings);
+          setCurrentSettings(orgSettings.settings);
         }
       } catch (error: any) {
         console.error('Auth error:', error);
-        toast({
-          title: "Authentication Error",
-          description: "Please sign in to continue",
-          variant: "destructive"
-        });
+        toast({ title: "Authentication Error", description: "Please sign in to continue", variant: "destructive" });
         navigate("/auth/login");
       }
     };
-
     checkAuth();
-  }, [navigate]);
+  }, [navigate, toast]);
 
   useEffect(() => {
     if (organizationId) {
@@ -111,12 +105,25 @@ export function Settings() {
     }
   }, [currentPage, pageSize, servicesCurrentPage, servicesPageSize, organizationId]);
 
+  useEffect(() => {
+    const fetchPayoutAccountStatus = async () => {
+      setIsLoadingPayouts(true);
+      console.log("Simulating fetch of payout account status...");
+      setTimeout(() => {
+        setConnectAccountStatus("not_connected");
+        setIsLoadingPayouts(false);
+      }, 1200);
+    };
+    if(organizationId) {
+        fetchPayoutAccountStatus();
+    }
+  }, [organizationId]);
+
   const fetchAmenities = async () => {
     if (!organizationId) return;
     
     setIsLoading(true);
     try {
-      // First get the total count
       const { count, error: countError } = await supabase
         .from('amenities')
         .select('*', { count: 'exact', head: true })
@@ -125,7 +132,6 @@ export function Settings() {
       if (countError) throw countError;
       setTotalAmenities(count || 0);
 
-      // Then fetch the paginated data
       const { data, error } = await supabase
         .from('amenities')
         .select('id, name, description, created_at')
@@ -151,7 +157,6 @@ export function Settings() {
     
     setIsLoading(true);
     try {
-      // First get the total count
       const { count, error: countError } = await supabase
         .from('services')
         .select('*', { count: 'exact', head: true })
@@ -160,7 +165,6 @@ export function Settings() {
       if (countError) throw countError;
       setTotalServices(count || 0);
 
-      // Then fetch the paginated data
       const { data, error } = await supabase
         .from('services')
         .select('id, name, description, created_at')
@@ -348,31 +352,33 @@ export function Settings() {
 
   const handleApplySettings = async () => {
     if (!organizationId) return;
-
     setIsApplyingSettings(true);
-
     try {
       const { error } = await supabase
         .from('organizations')
-        .update({ settings })
+        .update({ settings: currentSettings })
         .eq('id', organizationId);
-
       if (error) throw error;
-
-      toast({
-        title: "Settings updated",
-        description: "Your preferences have been saved successfully.",
-      });
+      toast({ title: "Settings updated", description: "Your preferences have been saved.", });
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update settings",
-        variant: "destructive"
-      });
+      toast({ title: "Error", description: error.message || "Failed to update settings", variant: "destructive" });
     } finally {
-      setTimeout(() => {
-        setIsApplyingSettings(false);
-      }, 500); // Show loading animation for at least 500ms
+      setTimeout(() => setIsApplyingSettings(false), 500);
+    }
+  };
+
+  const handleConnectWithStripe = async () => {
+    setIsConnectingStripe(true);
+    try {
+      console.log("Simulating call to create-stripe-connect-account-link for organization:", organizationId);
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      const simulatedStripeOnboardingUrl = `https://connect.stripe.com/express/onboarding/acct_simulated?redirect_url=${window.location.href}`;
+      toast({ title: "Redirigiendo a Stripe...", description: "Completa la configuración en la página de Stripe." });
+      window.location.href = simulatedStripeOnboardingUrl;
+    } catch (error: any) {
+      console.error("Error connecting with Stripe:", error);
+      toast({ title: "Error", description: error.message || "Could not connect with Stripe.", variant: "destructive" });
+      setIsConnectingStripe(false);
     }
   };
 
@@ -715,7 +721,7 @@ export function Settings() {
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="language">Language</Label>
-                  <Select value={settings.language} onValueChange={(value) => setSettings({ ...settings, language: value })}>
+                  <Select value={currentSettings.language} onValueChange={(value) => setCurrentSettings({ ...currentSettings, language: value })}>
                     <SelectTrigger id="language">
                       <SelectValue placeholder="Select language" />
                     </SelectTrigger>
@@ -729,7 +735,7 @@ export function Settings() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="region">Region</Label>
-                  <Select value={settings.region} onValueChange={(value) => setSettings({ ...settings, region: value })}>
+                  <Select value={currentSettings.region} onValueChange={(value) => setCurrentSettings({ ...currentSettings, region: value })}>
                     <SelectTrigger id="region">
                       <SelectValue placeholder="Select region" />
                     </SelectTrigger>
@@ -742,7 +748,7 @@ export function Settings() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="currency">Currency</Label>
-                  <Select value={settings.currency} onValueChange={(value) => setSettings({ ...settings, currency: value })}>
+                  <Select value={currentSettings.currency} onValueChange={(value) => setCurrentSettings({ ...currentSettings, currency: value })}>
                     <SelectTrigger id="currency">
                       <SelectValue placeholder="Select currency" />
                     </SelectTrigger>
@@ -755,7 +761,7 @@ export function Settings() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="dateFormat">Date Format</Label>
-                  <Select value={settings.dateFormat} onValueChange={(value) => setSettings({ ...settings, dateFormat: value })}>
+                  <Select value={currentSettings.dateFormat} onValueChange={(value) => setCurrentSettings({ ...currentSettings, dateFormat: value })}>
                     <SelectTrigger id="dateFormat">
                       <SelectValue placeholder="Select date format" />
                     </SelectTrigger>
@@ -778,7 +784,7 @@ export function Settings() {
               <div className="grid gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="numberFormat">Number Format</Label>
-                  <Select value={settings.numberFormat} onValueChange={(value) => setSettings({ ...settings, numberFormat: value })}>
+                  <Select value={currentSettings.numberFormat} onValueChange={(value) => setCurrentSettings({ ...currentSettings, numberFormat: value })}>
                     <SelectTrigger id="numberFormat">
                       <SelectValue placeholder="Select number format" />
                     </SelectTrigger>
@@ -790,7 +796,7 @@ export function Settings() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="measurementUnit">Measurement Unit</Label>
-                  <Select value={settings.measurementUnit} onValueChange={(value) => setSettings({ ...settings, measurementUnit: value })}>
+                  <Select value={currentSettings.measurementUnit} onValueChange={(value) => setCurrentSettings({ ...currentSettings, measurementUnit: value })}>
                     <SelectTrigger id="measurementUnit">
                       <SelectValue placeholder="Select measurement unit" />
                     </SelectTrigger>
@@ -824,6 +830,92 @@ export function Settings() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>💰 Configuración de Pagos</CardTitle>
+          <CardDescription>
+            Administra la cuenta bancaria donde recibirás tus ingresos por alquileres.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {isLoadingPayouts ? (
+            <div className="flex items-center justify-center py-10">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="ml-2">Cargando estado de la cuenta de pagos...</p>
+            </div>
+          ) : connectAccountStatus === "not_connected" ? (
+            <div className="p-6 border-2 border-dashed rounded-lg text-center space-y-3">
+              <CreditCard className="mx-auto h-12 w-12 text-muted-foreground" />
+              <h3 className="text-xl font-semibold">Conecta tu cuenta bancaria</h3>
+              <p className="text-muted-foreground">
+                Para recibir tus ingresos, necesitas conectar tu cuenta de forma segura a través de Stripe.
+              </p>
+              <Button 
+                onClick={handleConnectWithStripe} 
+                disabled={isConnectingStripe}
+                size="lg" 
+                className="mt-2"
+              >
+                {isConnectingStripe ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ExternalLink className="mr-2 h-4 w-4" />}
+                Conectar con Stripe
+              </Button>
+              <p className="text-xs text-muted-foreground pt-2">
+                Serás redirigido a Stripe para configurar tus datos de forma segura.
+              </p>
+            </div>
+          ) : connectAccountStatus === "pending_verification" ? (
+            <div className="p-6 border border-yellow-300 bg-yellow-50 rounded-lg text-yellow-700 space-y-3">
+              <AlertCircle className="mx-auto h-10 w-10" />
+              <h3 className="text-lg font-semibold text-center">Verificación Pendiente</h3>
+              <p className="text-sm">
+                Tu cuenta de Stripe está siendo verificada. Este proceso puede tardar unos minutos o, en algunos casos, Stripe podría contactarte para solicitar documentación adicional.
+              </p>
+              <p className="text-sm">
+                Puedes <a href="https://dashboard.stripe.com/account" target="_blank" rel="noopener noreferrer" className="underline hover:text-yellow-800">revisar el estado en tu dashboard de Stripe</a>.
+              </p>
+            </div>
+          ) : connectAccountStatus === "active" && accountDetails ? (
+            <div className="p-6 border border-green-300 bg-green-50 rounded-lg text-green-700 space-y-4">
+              <div className="flex items-center justify-center text-center space-x-2">
+                <CheckCircle2 className="h-10 w-10" />
+                <h3 className="text-lg font-semibold">¡Cuenta Conectada y Activa!</h3>
+              </div>
+              <p className="text-sm text-center">Estás listo para recibir pagos en la siguiente cuenta:</p>
+              <div className="p-4 bg-background border rounded-md text-foreground">
+                <p><strong>Banco:</strong> {accountDetails.bankName || 'N/D'}</p>
+                <p><strong>Terminación IBAN:</strong> **** {accountDetails.last4 || 'N/D'}</p>
+              </div>
+              <Button 
+                onClick={() => window.open("https://dashboard.stripe.com/account", "_blank")} 
+                variant="outline"
+                className="w-full"
+              >
+                <ExternalLink className="mr-2 h-4 w-4" />
+                Gestionar cuenta en Stripe
+              </Button>
+            </div>
+          ) : connectAccountStatus === "restricted" ? (
+             <div className="p-6 border border-red-300 bg-red-50 rounded-lg text-red-700 space-y-3">
+              <AlertCircle className="mx-auto h-10 w-10" />
+              <h3 className="text-lg font-semibold text-center">Cuenta Restringida</h3>
+              <p className="text-sm">
+               Tu cuenta de Stripe tiene restricciones que impiden los pagos. Stripe te habrá notificado sobre los pasos necesarios.
+              </p>
+              <Button 
+                onClick={() => window.open("https://dashboard.stripe.com/account", "_blank")} 
+                variant="outline"
+                className="w-full border-red-300 text-red-700 hover:bg-red-100"
+              >
+                <ExternalLink className="mr-2 h-4 w-4" />
+                Resolver problemas en Stripe
+              </Button>
+            </div>
+          ) : connectAccountStatus === "error" ? (
+            <p className="text-red-600">Hubo un error al cargar la información de tu cuenta de pagos. Por favor, inténtalo de nuevo más tarde.</p>
+          ) : null}
+        </CardContent>
+      </Card>
 
       <Dialog open={showAddAmenity} onOpenChange={setShowAddAmenity}>
         <DialogContent>
