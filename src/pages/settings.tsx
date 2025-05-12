@@ -56,8 +56,8 @@ export function Settings() {
   const [isApplyingSettings, setIsApplyingSettings] = useState(false);
   const { toast } = useToast();
 
-  const [connectAccountStatus, setConnectAccountStatus] = useState<StripeConnectStatus>("active");
-  const [accountDetails, setAccountDetails] = useState<PayoutAccountDetails | null>({ last4: "XX34", bankName: "Banco de Prueba Simulada" });
+  const [connectAccountStatus, setConnectAccountStatus] = useState<StripeConnectStatus>("not_connected");
+  const [accountDetails, setAccountDetails] = useState<PayoutAccountDetails | null>(null);
   const [isLoadingPayouts, setIsLoadingPayouts] = useState(true);
   const [isConnectingStripe, setIsConnectingStripe] = useState(false);
 
@@ -108,16 +108,15 @@ export function Settings() {
   useEffect(() => {
     const fetchPayoutAccountStatus = async () => {
       setIsLoadingPayouts(true);
-      console.log("Simulating fetch of payout account status...");
+      console.log("Simulating fetch of payout account status (runs on component mount for demo)...");
       setTimeout(() => {
-        setConnectAccountStatus("active"); setAccountDetails({ last4: "XX34", bankName: "Banco de Prueba Simulada" });
+        setConnectAccountStatus("active");
+        setAccountDetails({ last4: "SMUL", bankName: "Banco Simulado Global" });
         setIsLoadingPayouts(false);
       }, 1200);
     };
-    if(organizationId) {
-        fetchPayoutAccountStatus();
-    }
-  }, [organizationId]);
+    fetchPayoutAccountStatus();
+  }, []);
 
   const fetchAmenities = async () => {
     if (!organizationId) return;
@@ -856,17 +855,13 @@ export function Settings() {
                   </p>
                   <Button 
                     onClick={handleConnectWithStripe} 
-                    disabled={isConnectingStripe || !organizationId}
+                    disabled={isConnectingStripe}
                     size="lg" 
                     className="mt-2"
                   >
                     {isConnectingStripe ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ExternalLink className="mr-2 h-4 w-4" />}
                     Conectar con Stripe
                   </Button>
-                  {!organizationId && <p className="text-xs text-red-500 pt-1">Se requiere la carga de la organización.</p>}
-                  <p className="text-xs text-muted-foreground pt-2">
-                    Serás redirigido a Stripe para configurar tus datos de forma segura.
-                  </p>
                 </div>
               ) : connectAccountStatus === "pending_verification" ? (
                 <div className="p-6 border border-yellow-300 bg-yellow-50 rounded-lg text-yellow-700 space-y-3">
