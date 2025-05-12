@@ -22,7 +22,7 @@ interface RentTransaction {
   dueDate: string;
   amount: number;
   type: 'rent' | 'deposit';
-  status: 'scheduled' | 'processing' | 'paid' | 'failed' | 'paid_manually';
+  status: 'scheduled' | 'processing' | 'paid' | 'failed' | 'paid_manually' | 'pending';
   user: {
     name?: string;
     image?: string;
@@ -32,6 +32,7 @@ interface RentTransaction {
 }
 
 const statusStyles = {
+  pending: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300",
   scheduled: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
   processing: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-300",
   paid: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
@@ -349,6 +350,7 @@ export function RentCheck() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Statuses</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
               <SelectItem value="scheduled">Scheduled</SelectItem>
               <SelectItem value="processing">Processing</SelectItem>
               <SelectItem value="paid">Paid</SelectItem>

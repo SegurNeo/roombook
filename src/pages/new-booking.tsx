@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Loader2, Check, Calendar as CalendarIcon, Share, Mail, MessageSquare, Send } from "lucide-react";
+import { ArrowLeft, Loader2, Check, Calendar as CalendarIcon, Share, Mail, MessageSquare, Send, CreditCard } from "lucide-react";
 import { format, addMonths, isBefore, isAfter, differenceInMonths, startOfToday, endOfMonth, differenceInDays, startOfMonth } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
@@ -47,6 +47,7 @@ export function NewBooking({ onBack, onComplete }: NewBookingProps) {
   const [depositMonths, setDepositMonths] = useState<string>("2");
   const [noticeMonths, setNoticeMonths] = useState<string>("2");
   const [rentCalculation, setRentCalculation] = useState<"full" | "natural">("full");
+  const [paymentCollectionMethod, setPaymentCollectionMethod] = useState<"automatic" | "manual">("automatic");
   const [isCreating, setIsCreating] = useState(false);
   const { toast } = useToast();
 
@@ -236,7 +237,8 @@ export function NewBooking({ onBack, onComplete }: NewBookingProps) {
           deposit_months: parseInt(depositMonths),
           deposit_amount: finalDepositAmount,
           notice_period_months: parseInt(noticeMonths),
-          rent_calculation: rentCalculation
+          rent_calculation: rentCalculation,
+          payment_collection_method: paymentCollectionMethod,
         }])
         .select()
         .single();
@@ -256,8 +258,7 @@ export function NewBooking({ onBack, onComplete }: NewBookingProps) {
           due_date: format(payment.date, 'yyyy-MM-dd'), // Asegurar formato correcto para la BD
           amount: payment.amount,
           type: payment.type.toLowerCase() as 'rent' | 'deposit', // 'Rent' o 'Deposit'
-          status: 'scheduled', // ¡Importante!
-          // description: payment.description, // Opcional, si tienes una columna 'description'
+          status: paymentCollectionMethod === 'automatic' ? 'scheduled' : 'pending',
         }));
 
         const { error: rentTransactionsError } = await supabase
@@ -278,50 +279,49 @@ export function NewBooking({ onBack, onComplete }: NewBookingProps) {
           // setIsCreating(false) ya se maneja en el catch general o finally.
           throw new Error(`Booking created (ID: ${booking.id}), but failed to create its rent transactions.`);
         } else {
-          console.log(`${rentTransactionsToInsert.length} rent transactions created for booking ${booking.id}`);
+          console.log(`${rentTransactionsToInsert.length} rent transactions created for booking ${booking.id} with status: ${paymentCollectionMethod === 'automatic' ? 'scheduled' : 'pending'}`);
 
-          // **** INVOCAR schedule-stripe-invoices ****
-          try {
-            console.log(`Attempting to schedule Stripe invoices for booking ID: ${booking.id}`);
-            const { data: scheduleData, error: scheduleError } = await supabase.functions.invoke(
-              "schedule-stripe-invoices",
-              { body: { booking_id: booking.id } }
-            );
+          if (paymentCollectionMethod === 'automatic') {
+            try {
+              console.log(`Attempting to schedule Stripe invoices for AUTOMATIC booking ID: ${booking.id}`);
+              const { data: scheduleData, error: scheduleErrorFn } = await supabase.functions.invoke(
+                "schedule-stripe-invoices",
+                { body: { booking_id: booking.id } }
+              );
 
-            if (scheduleError) {
-              // Error al invocar la función (network, function down, etc.)
-              console.error('Error invoking schedule-stripe-invoices:', scheduleError);
+              if (scheduleErrorFn) {
+                console.error('Error invoking schedule-stripe-invoices:', scheduleErrorFn);
+                toast({
+                  title: "Error scheduling invoices",
+                  description: `Rent transactions created, but failed to trigger invoice scheduling: ${scheduleErrorFn.message}. Please check Stripe or trigger manually.`,
+                  variant: "default", 
+                });
+              } else if (scheduleData?.error) {
+                console.error('Error from schedule-stripe-invoices function:', scheduleData.error);
+                toast({
+                  title: "Invoice Scheduling Problem",
+                  description: `Rent transactions created, but there was an issue during invoice scheduling: ${scheduleData.error}. Please check Stripe or trigger manually.`,
+                  variant: "default",
+                });
+              } else {
+                console.log('schedule-stripe-invoices invoked successfully:', scheduleData);
+                toast({
+                  title: "Invoice Scheduling Initiated",
+                  description: scheduleData?.message || "Stripe invoices are being scheduled.",
+                  variant: "default", 
+                });
+              }
+            } catch (invokeInternalError: any) {
+              console.error('Unexpected error invoking schedule-stripe-invoices:', invokeInternalError);
               toast({
-                title: "Error scheduling invoices",
-                description: `Rent transactions created, but failed to trigger invoice scheduling: ${scheduleError.message}. Please check Stripe or trigger manually.`,
-                variant: "default",
-              });
-            } else if (scheduleData?.error) {
-              // La función fue invocada pero devolvió un error en su propia lógica
-              console.error('Error from schedule-stripe-invoices function:', scheduleData.error);
-              toast({
-                title: "Invoice Scheduling Problem",
-                description: `Rent transactions created, but there was an issue during invoice scheduling: ${scheduleData.error}. Please check Stripe or trigger manually.`,
-                variant: "default",
-              });
-            } else {
-              console.log('schedule-stripe-invoices invoked successfully:', scheduleData);
-              toast({
-                title: "Invoice Scheduling Initiated",
-                description: scheduleData?.message || "Stripe invoices are being scheduled.",
+                title: "Error during invoice scheduling invocation",
+                description: `Rent transactions created, but failed to trigger invoice scheduling: ${invokeInternalError.message}. Please check Stripe or trigger manually.`,
                 variant: "default",
               });
             }
-          } catch (invokeError: any) {
-            // Error inesperado durante la invocación
-            console.error('Unexpected error invoking schedule-stripe-invoices:', invokeError);
-            toast({
-              title: "Error during invoice scheduling invocation",
-              description: `Rent transactions created, but failed to trigger invoice scheduling: ${invokeError.message}. Please check Stripe or trigger manually.`,
-              variant: "default",
-            });
+          } else {
+            console.log(`Booking ID: ${booking.id} is MANUAL. Skipping Stripe invoice scheduling.`);
           }
-          // **** FIN DE LA INVOCACIÓN ****
         }
       }
       // **** FIN DE NUEVA LÓGICA ****
@@ -759,6 +759,38 @@ export function NewBooking({ onBack, onComplete }: NewBookingProps) {
                 {rentCalculation === "full" 
                   ? "The first month's rent will be calculated for a full 30-day period from the entry date."
                   : "The first month's rent will be calculated proportionally from the entry date until the end of the month."}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Payment Collection Method</Label>
+              <RadioGroup
+                value={paymentCollectionMethod}
+                onValueChange={(value: "automatic" | "manual") => setPaymentCollectionMethod(value)}
+                className="grid grid-cols-2 gap-4"
+                disabled={isCreating}
+              >
+                <Label 
+                  htmlFor="collection-automatic" 
+                  className="flex flex-col items-center justify-center rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground [&:has([data-state=checked])]:border-primary cursor-pointer"
+                >
+                  <RadioGroupItem value="automatic" id="collection-automatic" className="sr-only" />
+                  <CreditCard className="mb-3 h-6 w-6" />
+                  Automatic (SEPA)
+                </Label>
+                <Label 
+                  htmlFor="collection-manual" 
+                  className="flex flex-col items-center justify-center rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground [&:has([data-state=checked])]:border-primary cursor-pointer"
+                >
+                  <RadioGroupItem value="manual" id="collection-manual" className="sr-only" />
+                  <Send className="mb-3 h-6 w-6" />
+                  Manual
+                </Label>
+              </RadioGroup>
+              <p className="text-sm text-muted-foreground mt-1">
+                {paymentCollectionMethod === "automatic"
+                  ? "Rent will be collected automatically via SEPA Direct Debit if a mandate is active."
+                  : "Rent payments will need to be manually recorded."}
               </p>
             </div>
           </div>
