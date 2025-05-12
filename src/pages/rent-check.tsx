@@ -115,8 +115,8 @@ export function RentCheck() {
       if (selectedUserId) {
         query = query.eq('created_by', selectedUserId);
       }
-      if (collectionMethodFilter !== "all") {
-        query = query.eq('payment_collection_method', collectionMethodFilter);
+      if (collectionMethodFilter && collectionMethodFilter !== "all") {
+        query = query.filter('bookings.payment_collection_method', 'eq', collectionMethodFilter);
       }
 
       // Apply time period filter
