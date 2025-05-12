@@ -13,6 +13,7 @@ import { supabase } from "@/lib/supabase";
 import { Loader2 } from "lucide-react";
 import { UserFilter } from "@/components/user-filter";
 import { NewCustomer } from "./new-customer";
+import { useNavigate } from "react-router-dom";
 
 interface CustomersProps { }
 
@@ -54,6 +55,7 @@ export function Customers({ }: CustomersProps) {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const { toast } = useToast();
   const [showNewCustomerForm, setShowNewCustomerForm] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!showNewCustomerForm) {
@@ -185,6 +187,7 @@ export function Customers({ }: CustomersProps) {
               onComplete={(customerData) => {
                   console.log('New customer created:', customerData);
                   setShowNewCustomerForm(false);
+                  navigate('/customers');
               }}
           />
       );

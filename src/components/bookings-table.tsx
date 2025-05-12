@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Trash2, Pencil, ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { Trash2, Pencil, ChevronLeft, ChevronRight, Plus, HandCoins, Repeat, Loader2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -9,16 +9,30 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import type { ColumnOption } from "@/pages/bookings";
 import { supabase } from "@/lib/supabase";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+import React from "react";
 
 interface Booking {
   id: string;
   customer: string;
+  customer_details: {
+    id: string;
+    stripe_mandate_status?: string | null;
+  };
   asset: string;
   room: string;
   startDate: string;
   endDate: string;
   price: string;
   totalRevenue: string;
+  booking_status: string;
+  payment_status?: string | null;
+  stripe_payment_intent_id?: string | null;
+  user?: {
+    name?: string;
+    image?: string;
+  };
 }
 
 interface BookingsTableProps {
@@ -27,6 +41,15 @@ interface BookingsTableProps {
   columnOptions: ColumnOption[];
   onNewBooking?: () => void;
 }
+
+const paymentStatusStyles = {
+  pending: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300",
+  paid_manual: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
+  processing_stripe: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
+  paid_stripe: "bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300",
+  failed_stripe: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300",
+  default: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300",
+};
 
 export function BookingsTable({ bookings, selectedColumns, columnOptions, onNewBooking }: BookingsTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
@@ -37,7 +60,93 @@ export function BookingsTable({ bookings, selectedColumns, columnOptions, onNewB
   const [isDeleting, setIsDeleting] = useState(false);
   const { toast } = useToast();
 
+  // NEW: States for payment actions loading
+  const [markingPaidManually, setMarkingPaidManually] = useState<string | null>(null); // Store booking ID being processed
+  const [chargingSEPA, setChargingSEPA] = useState<string | null>(null); // Store booking ID being processed
+
   const DELETE_PASSWORD = "delete123";
+
+  const handleMarkPaidManual = async (booking: Booking) => {
+    if (!booking.id) {
+      toast({ title: "Error", description: "Booking ID is missing.", variant: "destructive" });
+      return;
+    }
+    setMarkingPaidManually(booking.id);
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        'mark-booking-paid-manual',
+        { body: { booking_id: booking.id } }
+      );
+
+      if (error) throw error;
+
+      if (data.error) { // Handle errors returned successfully from the function
+        throw new Error(data.error);
+      }
+
+      toast({
+        title: "Payment Status Updated",
+        description: data.message || `Booking ${booking.id} marked as paid manually.`,
+      });
+      // OPTIONAL: Update local state to reflect change immediately 
+      // This requires bookings state to be managed here or passed down with a setter
+      // For now, a page reload or re-fetch would be triggered by parent or user
+      // Example: onBookingUpdate(data.updated_booking); 
+      // For simplicity, we rely on parent component to refetch or user to see update after next fetch.
+      // window.location.reload(); // Simplest, but not ideal UX.
+
+    } catch (error: any) {
+      console.error("Error marking booking as paid manually:", error);
+      toast({
+        title: "Error Updating Payment",
+        description: error.message || "Could not mark booking as paid manually.",
+        variant: "destructive",
+      });
+    } finally {
+      setMarkingPaidManually(null);
+    }
+  };
+
+  const handleChargeSEPA = async (booking: Booking) => {
+    if (!booking.id) {
+      toast({ title: "Error", description: "Booking ID is missing.", variant: "destructive" });
+      return;
+    }
+    if (booking.customer_details?.stripe_mandate_status !== 'active') {
+      toast({ title: "Mandate Error", description: "Customer SEPA mandate is not active.", variant: "destructive" });
+      return;
+    }
+    setChargingSEPA(booking.id);
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        'charge-sepa-booking',
+        { body: { booking_id: booking.id } }
+      );
+
+      if (error) throw error;
+
+      if (data.error) { // Handle errors returned successfully from the function
+        throw new Error(data.error);
+      }
+
+      toast({
+        title: "SEPA Charge Initiated",
+        description: data.message || `SEPA direct debit initiated for booking ${booking.id}. Status will update upon completion.`,
+      });
+      // OPTIONAL: Update local state to reflect change immediately
+      // As above, relying on refetch for now.
+
+    } catch (error: any) {
+      console.error("Error initiating SEPA charge:", error);
+      toast({
+        title: "Error Initiating Payment",
+        description: error.message || "Could not initiate SEPA direct debit.",
+        variant: "destructive",
+      });
+    } finally {
+      setChargingSEPA(null);
+    }
+  };
 
   // If there are no bookings, show the empty state
   if (bookings.length === 0) {
@@ -139,7 +248,39 @@ export function BookingsTable({ bookings, selectedColumns, columnOptions, onNewB
         return <TableCell>{booking.price}</TableCell>;
       case "totalRevenue":
         return <TableCell>{booking.totalRevenue}</TableCell>;
+      case "booking_status":
+        return (
+          <TableCell>
+            <Badge variant="outline" className="capitalize">
+              {booking.booking_status || 'N/A'}
+            </Badge>
+          </TableCell>
+        );
+      case "payment_status":
+        return (
+          <TableCell>
+            <Badge 
+              variant="secondary" 
+              className={cn(
+                "capitalize",
+                paymentStatusStyles[booking.payment_status as keyof typeof paymentStatusStyles] || paymentStatusStyles.default
+              )}
+            >
+              {booking.payment_status?.replace(/_/g, ' ') || 'Unknown'}
+            </Badge>
+          </TableCell>
+        );
       default:
+        const directValue = booking[columnId as keyof Booking];
+        if (directValue !== undefined) {
+          if (typeof directValue === 'object' && directValue !== null && !React.isValidElement(directValue)) {
+            if (columnId === 'customer_details') return <TableCell>-</TableCell>;
+            console.warn(`Rendering unexpected object for column ${columnId}, booking ${booking.id}:`, directValue);
+            return <TableCell>{'[Object]'}</TableCell>;
+          }
+          return <TableCell>{String(directValue)}</TableCell>;
+        }
+        console.warn(`Unhandled columnId: ${columnId} for booking ${booking.id}`);
         return <TableCell>-</TableCell>;
     }
   };
@@ -161,13 +302,43 @@ export function BookingsTable({ bookings, selectedColumns, columnOptions, onNewB
               <TableRow key={booking.id}>
                 {visibleColumns.map((column) => renderCell(booking, column.id))}
                 <TableCell>
-                  <div className="flex items-center space-x-2">
-                    <Button variant="secondary" size="sm">
+                  <div className="flex items-center space-x-1.5">
+                    <Button variant="secondary" size="icon" title="Edit Booking" disabled>
                       <Pencil className="h-4 w-4" />
-                      <span className="ml-2">Edit</span>
                     </Button>
+                    
+                    {/* NEW: Mark as Paid Manually Button */}
                     <Button 
-                      variant="secondary" 
+                      variant="outline" 
+                      size="icon" 
+                      title="Mark as Paid Manually"
+                      onClick={() => handleMarkPaidManual(booking)}
+                      disabled={['paid_manual', 'paid_stripe', 'processing_stripe'].includes(booking.payment_status || '') || markingPaidManually === booking.id || chargingSEPA === booking.id}
+                    >
+                      {markingPaidManually === booking.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <HandCoins className="h-4 w-4" />
+                      )}
+                    </Button>
+
+                    {/* NEW: Charge SEPA Direct Debit Button */}
+                    <Button 
+                      variant="outline" 
+                      size="icon" 
+                      title="Charge SEPA Direct Debit"
+                      onClick={() => handleChargeSEPA(booking)}
+                      disabled={booking.customer_details?.stripe_mandate_status !== 'active' || ['paid_stripe', 'processing_stripe', 'paid_manual'].includes(booking.payment_status || '') || chargingSEPA === booking.id || markingPaidManually === booking.id}
+                    >
+                      {chargingSEPA === booking.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Repeat className="h-4 w-4" />
+                      )}
+                    </Button>
+
+                    <Button 
+                      variant="destructive" 
                       size="sm"
                       onClick={() => handleDeleteClick(booking)}
                       disabled={isDeleting}

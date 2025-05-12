@@ -30,6 +30,7 @@ const columnOptions: ColumnOption[] = [
   { id: "endDate", label: "End Date" },
   { id: "price", label: "Price" },
   { id: "totalRevenue", label: "Total Revenue" },
+  { id: "booking_status", label: "Booking Status" },
   { id: "user", label: "Created by" },
 ];
 
@@ -48,7 +49,10 @@ export function Bookings({ }: BookingsProps) {
   const [tempDateRange, setTempDateRange] = useState(dateRange);
   const [activeTab, setActiveTab] = useState("entry");
   const [selectedColumns, setSelectedColumns] = useState<string[]>(
-    columnOptions.filter(col => col.required || ["room", "startDate", "endDate", "price", "totalRevenue", "user"].includes(col.id)).map(col => col.id)
+    columnOptions.filter(col => 
+      col.required || 
+      ["room", "startDate", "endDate", "price", "totalRevenue", "user", "booking_status"].includes(col.id)
+    ).map(col => col.id)
   );
   const [bookings, setBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,8 +82,10 @@ export function Bookings({ }: BookingsProps) {
           status,
           created_by,
           customers (
+            id,
             first_name,
-            last_name
+            last_name,
+            stripe_mandate_status
           ),
           rooms (
             name,
@@ -104,6 +110,7 @@ export function Bookings({ }: BookingsProps) {
       const transformedBookings = bookingsData?.map(booking => ({
         id: booking.id,
         customer: `${(booking.customers as any)?.first_name || ''} ${(booking.customers as any)?.last_name || ''}`.trim(),
+        customer_details: booking.customers,
         asset: (booking.rooms as any)?.assets?.name || 'Unknown',
         room: (booking.rooms as any)?.name || 'Unknown',
         startDate: format(new Date(booking.start_date), "PP"),
@@ -113,7 +120,8 @@ export function Bookings({ }: BookingsProps) {
         user: {
           name: (booking.profiles as any)?.full_name || 'Unknown',
           image: `https://api.dicebear.com/7.x/initials/svg?seed=${(booking.profiles as any)?.full_name || 'Unknown'}`
-        }
+        },
+        booking_status: booking.status
       })) || [];
 
       setBookings(transformedBookings);

@@ -22,17 +22,21 @@ interface RentTransaction {
   dueDate: string;
   amount: number;
   type: 'rent' | 'deposit';
-  status: 'pending' | 'paid' | 'late';
+  status: 'scheduled' | 'processing' | 'paid' | 'failed' | 'paid_manually';
   user: {
     name?: string;
     image?: string;
   };
+  stripe_invoice_id?: string | null;
+  stripe_payment_intent_id?: string | null;
 }
 
 const statusStyles = {
-  pending: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300",
+  scheduled: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
+  processing: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-300",
   paid: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
-  late: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300",
+  failed: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300",
+  paid_manually: "bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300",
 };
 
 export interface ColumnOption {
@@ -80,6 +84,8 @@ export function RentCheck() {
           amount,
           type,
           status,
+          stripe_invoice_id,
+          stripe_payment_intent_id,
           customers (
             first_name,
             last_name
@@ -134,7 +140,9 @@ export function RentCheck() {
         user: {
           name: (transaction.profiles as any)?.full_name || 'Unknown',
           image: `https://api.dicebear.com/7.x/initials/svg?seed=${(transaction.profiles as any)?.full_name || 'Unknown'}`
-        }
+        },
+        stripe_invoice_id: transaction.stripe_invoice_id,
+        stripe_payment_intent_id: transaction.stripe_payment_intent_id
       }));
 
       setTransactions(transformedTransactions);
@@ -150,27 +158,37 @@ export function RentCheck() {
     }
   };
 
-  const handleStatusChange = async (transactionId: string, newStatus: string) => {
+  const handleMarkAsPaidManually = async (transactionId: string) => {
     try {
-      const { error } = await supabase
-        .from('rent_transactions')
-        .update({ status: newStatus })
-        .eq('id', transactionId);
+      setLoading(true);
 
-      if (error) throw error;
+      const { data, error } = await supabase.functions.invoke("mark-transaction-paid-manual", {
+        body: { rent_transaction_id: transactionId },
+      });
 
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      if (data?.error) {
+        throw new Error(data.error.details || data.error.message || "Failed to mark as paid manually");
+      }
+      
       toast({
-        title: "Status updated",
-        description: "Transaction status has been updated successfully.",
+        title: "Status Updated",
+        description: data?.message || "Transaction marked as paid manually.",
       });
 
       fetchTransactions();
     } catch (error: any) {
+      console.error("Error marking transaction as paid manually:", error);
       toast({
-        title: "Error updating status",
+        title: "Error Updating Status",
         description: error.message,
-        variant: "destructive"
+        variant: "destructive",
       });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -178,9 +196,9 @@ export function RentCheck() {
     return transactions.reduce(
       (acc, transaction) => ({
         total: acc.total + transaction.amount,
-        pending: acc.pending + (transaction.status === 'pending' ? transaction.amount : 0),
+        pending: acc.pending + (transaction.status === 'scheduled' || transaction.status === 'processing' ? transaction.amount : 0),
         paid: acc.paid + (transaction.status === 'paid' ? transaction.amount : 0),
-        late: acc.late + (transaction.status === 'late' ? transaction.amount : 0),
+        late: acc.late + (transaction.status === 'failed' ? transaction.amount : 0),
       }),
       { total: 0, pending: 0, paid: 0, late: 0 }
     );
@@ -331,9 +349,11 @@ export function RentCheck() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="scheduled">Scheduled</SelectItem>
+              <SelectItem value="processing">Processing</SelectItem>
               <SelectItem value="paid">Paid</SelectItem>
-              <SelectItem value="late">Late</SelectItem>
+              <SelectItem value="failed">Failed</SelectItem>
+              <SelectItem value="paid_manually">Paid Manually</SelectItem>
             </SelectContent>
           </Select>
 
@@ -442,19 +462,14 @@ export function RentCheck() {
                     <TableCell>{transaction.user.name}</TableCell>
                   )}
                   <TableCell>
-                    <Select
-                      value={transaction.status}
-                      onValueChange={(value) => handleStatusChange(transaction.id, value)}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleMarkAsPaidManually(transaction.id)}
+                      disabled={transaction.status === 'paid' || transaction.status === 'paid_manually' || loading}
                     >
-                      <SelectTrigger className="w-[100px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="paid">Paid</SelectItem>
-                        <SelectItem value="late">Late</SelectItem>
-                      </SelectContent>
-                    </Select>
+                      Mark Paid Manually
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}

@@ -242,10 +242,93 @@ export function NewBooking({ onBack, onComplete }: NewBookingProps) {
         .single();
 
       if (bookingError) throw bookingError;
+      if (!booking) throw new Error("Booking creation returned no data.");
+
+      // **** NUEVA LÓGICA PARA CREAR RENT_TRANSACTIONS ****
+      const paymentTimeline = generatePaymentTimeline();
+      if (paymentTimeline.length > 0) {
+        const rentTransactionsToInsert = paymentTimeline.map(payment => ({
+          booking_id: booking.id, // ID del booking recién creado
+          customer_id: selectedCustomer.id,
+          room_id: selectedRoom.id,
+          organization_id: profile.organization_id,
+          created_by: user.id,
+          due_date: format(payment.date, 'yyyy-MM-dd'), // Asegurar formato correcto para la BD
+          amount: payment.amount,
+          type: payment.type.toLowerCase() as 'rent' | 'deposit', // 'Rent' o 'Deposit'
+          status: 'scheduled', // ¡Importante!
+          // description: payment.description, // Opcional, si tienes una columna 'description'
+        }));
+
+        const { error: rentTransactionsError } = await supabase
+          .from('rent_transactions')
+          .insert(rentTransactionsToInsert);
+
+        if (rentTransactionsError) {
+          // Si falla la creación de rent_transactions, podríamos considerar qué hacer.
+          // ¿Eliminar el booking? ¿Marcarlo de alguna forma? ¿Solo loguear el error?
+          // Por ahora, solo logueamos y notificamos, pero el booking ya existe.
+          console.error('Error creating rent transactions:', rentTransactionsError);
+          toast({
+            title: "Error creating rent transactions",
+            description: rentTransactionsError.message,
+            variant: "destructive",
+          });
+          // NO continuar con onComplete si las transacciones fallan, ya que el estado es inconsistente.
+          // setIsCreating(false) ya se maneja en el catch general o finally.
+          throw new Error(`Booking created (ID: ${booking.id}), but failed to create its rent transactions.`);
+        } else {
+          console.log(`${rentTransactionsToInsert.length} rent transactions created for booking ${booking.id}`);
+
+          // **** INVOCAR schedule-stripe-invoices ****
+          try {
+            console.log(`Attempting to schedule Stripe invoices for booking ID: ${booking.id}`);
+            const { data: scheduleData, error: scheduleError } = await supabase.functions.invoke(
+              "schedule-stripe-invoices",
+              { body: { booking_id: booking.id } }
+            );
+
+            if (scheduleError) {
+              // Error al invocar la función (network, function down, etc.)
+              console.error('Error invoking schedule-stripe-invoices:', scheduleError);
+              toast({
+                title: "Error scheduling invoices",
+                description: `Rent transactions created, but failed to trigger invoice scheduling: ${scheduleError.message}. Please check Stripe or trigger manually.`,
+                variant: "default",
+              });
+            } else if (scheduleData?.error) {
+              // La función fue invocada pero devolvió un error en su propia lógica
+              console.error('Error from schedule-stripe-invoices function:', scheduleData.error);
+              toast({
+                title: "Invoice Scheduling Problem",
+                description: `Rent transactions created, but there was an issue during invoice scheduling: ${scheduleData.error}. Please check Stripe or trigger manually.`,
+                variant: "default",
+              });
+            } else {
+              console.log('schedule-stripe-invoices invoked successfully:', scheduleData);
+              toast({
+                title: "Invoice Scheduling Initiated",
+                description: scheduleData?.message || "Stripe invoices are being scheduled.",
+                variant: "default",
+              });
+            }
+          } catch (invokeError: any) {
+            // Error inesperado durante la invocación
+            console.error('Unexpected error invoking schedule-stripe-invoices:', invokeError);
+            toast({
+              title: "Error during invoice scheduling invocation",
+              description: `Rent transactions created, but failed to trigger invoice scheduling: ${invokeError.message}. Please check Stripe or trigger manually.`,
+              variant: "default",
+            });
+          }
+          // **** FIN DE LA INVOCACIÓN ****
+        }
+      }
+      // **** FIN DE NUEVA LÓGICA ****
 
       toast({
         title: "Booking created",
-        description: "The booking has been successfully created.",
+        description: "Booking and rent transactions created. Invoice scheduling is in process.",
       });
 
       onComplete(booking);
@@ -256,6 +339,7 @@ export function NewBooking({ onBack, onComplete }: NewBookingProps) {
         description: error.message || "Failed to create booking. Please try again.",
         variant: "destructive",
       });
+    } finally {
       setIsCreating(false);
     }
   };
