@@ -268,17 +268,13 @@ export function NewBooking({ onBack, onComplete }: NewBookingProps) {
           .insert(rentTransactionsToInsert);
 
         if (rentTransactionsError) {
-          // Si falla la creación de rent_transactions, podríamos considerar qué hacer.
-          // ¿Eliminar el booking? ¿Marcarlo de alguna forma? ¿Solo loguear el error?
-          // Por ahora, solo logueamos y notificamos, pero el booking ya existe.
-          console.error('Error creating rent transactions:', rentTransactionsError);
+          console.error('Error creating rent transactions (raw object):', rentTransactionsError);
+          console.error('Error creating rent transactions (JSON string):', JSON.stringify(rentTransactionsError, null, 2));
           toast({
             title: "Error creating rent transactions",
-            description: rentTransactionsError.message,
+            description: rentTransactionsError.message + (rentTransactionsError.details ? ` Details: ${rentTransactionsError.details}`: '') + (rentTransactionsError.hint ? ` Hint: ${rentTransactionsError.hint}` : ''),
             variant: "destructive",
           });
-          // NO continuar con onComplete si las transacciones fallan, ya que el estado es inconsistente.
-          // setIsCreating(false) ya se maneja en el catch general o finally.
           throw new Error(`Booking created (ID: ${booking.id}), but failed to create its rent transactions.`);
         } else {
           console.log(`${rentTransactionsToInsert.length} rent transactions created for booking ${booking.id} with status: ${paymentCollectionMethod === 'automatic' ? 'scheduled' : 'pending'}`);

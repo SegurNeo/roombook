@@ -29,6 +29,7 @@ interface RentTransaction {
   };
   stripe_invoice_id?: string | null;
   stripe_payment_intent_id?: string | null;
+  payment_collection_method?: 'automatic' | 'manual' | null;
 }
 
 const statusStyles = {
@@ -63,6 +64,7 @@ export function RentCheck() {
   const [loading, setLoading] = useState(true);
   const [timePeriod, setTimePeriod] = useState("month");
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [collectionMethodFilter, setCollectionMethodFilter] = useState<string>("all");
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [showColumnSelector, setShowColumnSelector] = useState(false);
   const [selectedColumns, setSelectedColumns] = useState<string[]>(
@@ -72,7 +74,7 @@ export function RentCheck() {
 
   useEffect(() => {
     fetchTransactions();
-  }, [timePeriod, statusFilter, selectedUserId]);
+  }, [timePeriod, statusFilter, selectedUserId, collectionMethodFilter]);
 
   const fetchTransactions = async () => {
     try {
@@ -100,6 +102,9 @@ export function RentCheck() {
           profiles!rent_transactions_created_by_fkey (
             id,
             full_name
+          ),
+          bookings (
+            payment_collection_method
           )
         `);
 
@@ -109,6 +114,9 @@ export function RentCheck() {
       }
       if (selectedUserId) {
         query = query.eq('created_by', selectedUserId);
+      }
+      if (collectionMethodFilter !== "all") {
+        query = query.eq('payment_collection_method', collectionMethodFilter);
       }
 
       // Apply time period filter
@@ -143,7 +151,8 @@ export function RentCheck() {
           image: `https://api.dicebear.com/7.x/initials/svg?seed=${(transaction.profiles as any)?.full_name || 'Unknown'}`
         },
         stripe_invoice_id: transaction.stripe_invoice_id,
-        stripe_payment_intent_id: transaction.stripe_payment_intent_id
+        stripe_payment_intent_id: transaction.stripe_payment_intent_id,
+        payment_collection_method: (transaction.bookings as any)?.payment_collection_method 
       }));
 
       setTransactions(transformedTransactions);
@@ -379,6 +388,17 @@ export function RentCheck() {
         </div>
 
         <div className="flex items-center space-x-4">
+          <Select value={collectionMethodFilter} onValueChange={setCollectionMethodFilter}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Collection Method" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Methods</SelectItem>
+              <SelectItem value="automatic">Automatic</SelectItem>
+              <SelectItem value="manual">Manual</SelectItem>
+            </SelectContent>
+          </Select>
+
           <Select value={statusFilter || "all"} onValueChange={(value) => setStatusFilter(value === "all" ? null : value)}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="All Statuses" />
