@@ -126,6 +126,7 @@ export function CustomerDetails() {
           description: "Stripe is processing the mandate setup. The status will update shortly.",
           duration: 7000,
         });
+        if (id) fetchCustomerDetails();
       } else if (mandateStatus === 'cancel') {
         toast({
           title: "Mandate Setup Cancelled",
@@ -133,11 +134,12 @@ export function CustomerDetails() {
           variant: "default",
         });
       }
-      searchParams.delete('mandate_setup');
-      setSearchParams(searchParams, { replace: true });
+      const newSearchParams = new URLSearchParams(searchParams);
+      newSearchParams.delete('mandate_setup');
+      setSearchParams(newSearchParams, { replace: true });
     }
 
-  }, [id]);
+  }, [id, searchParams, setSearchParams, toast]);
 
   const fetchCustomerDetails = async () => {
     if (!id) return;
@@ -147,6 +149,8 @@ export function CustomerDetails() {
         .from('customers')
         .select(`
           *,
+          stripe_payment_method_id, 
+          stripe_mandate_status,
           bookings (
             id,
             start_date,
