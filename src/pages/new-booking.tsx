@@ -261,6 +261,8 @@ export function NewBooking({ onBack, onComplete }: NewBookingProps) {
           status: paymentCollectionMethod === 'automatic' ? 'scheduled' : 'pending',
         }));
 
+        console.log("Attempting to insert rent_transactions:", JSON.stringify(rentTransactionsToInsert, null, 2));
+
         const { error: rentTransactionsError } = await supabase
           .from('rent_transactions')
           .insert(rentTransactionsToInsert);

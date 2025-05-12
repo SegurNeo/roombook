@@ -193,6 +193,41 @@ export function RentCheck() {
     }
   };
 
+  const handleSwitchToManual = async (transactionId: string, currentStatus: string) => {
+    if (['pending', 'paid', 'paid_manually'].includes(currentStatus)) {
+        toast({
+            title: "Action Not Allowed",
+            description: `Transaction is already in status '${currentStatus}' and cannot be switched to manual.`,
+            variant: "default" 
+        });
+        return;
+    }
+
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("switch-transaction-to-manual", {
+        body: { rent_transaction_id: transactionId },
+      });
+
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error.details || data.error.message || "Failed to switch to manual");
+      
+      toast({
+        title: "Switched to Manual",
+        description: data?.message || "Transaction switched to manual collection. Status set to 'pending'.",
+      });
+      fetchTransactions(); // Refrescar
+    } catch (error: any) {
+      toast({
+        title: "Error Switching to Manual",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const calculateTotals = () => {
     return transactions.reduce(
       (acc, transaction) => ({
@@ -464,14 +499,27 @@ export function RentCheck() {
                     <TableCell>{transaction.user.name}</TableCell>
                   )}
                   <TableCell>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleMarkAsPaidManually(transaction.id)}
-                      disabled={transaction.status === 'paid' || transaction.status === 'paid_manually' || loading}
-                    >
-                      Mark Paid Manually
-                    </Button>
+                    <div className="flex items-center space-x-1"> 
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleMarkAsPaidManually(transaction.id)}
+                        disabled={transaction.status === 'paid' || transaction.status === 'paid_manually' || loading}
+                      >
+                        Mark Paid
+                      </Button>
+                      { (transaction.status === 'scheduled' || transaction.status === 'processing' || transaction.status === 'failed') && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleSwitchToManual(transaction.id, transaction.status)}
+                          disabled={loading}
+                          title="Switch to Manual Collection"
+                        >
+                          To Manual
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
