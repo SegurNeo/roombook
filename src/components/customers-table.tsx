@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Trash2, Pencil, ChevronLeft, ChevronRight, Plus, Eye, CreditCard, Loader2 } from "lucide-react";
+import { Trash2, Pencil, ChevronLeft, ChevronRight, Plus, CreditCard, Loader2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -245,35 +245,32 @@ export function CustomersTable({ customers, selectedColumns, columnOptions, onDe
                   <div className="flex items-center space-x-2">
                     <Button
                       variant="secondary"
-                      size="icon"
                       onClick={() => navigate(`/customers/${customer.id}`)}
-                      title="View Details"
+                      className="flex items-center"
                     >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                    <Button variant="secondary" size="icon" title="Edit Customer" disabled>
-                      <Pencil className="h-4 w-4" />
+                      <Pencil className="h-4 w-4 mr-2" />
+                      Edit
                     </Button>
                     <Button
                       variant="secondary"
-                      size="icon"
                       onClick={() => handleConfigureSEPA(customer)}
                       disabled={configuringCustomerId === customer.id}
-                      title="Configure SEPA Direct Debit"
+                      className="flex items-center whitespace-nowrap"
                     >
                       {configuringCustomerId === customer.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                       ) : (
-                          <CreditCard className="h-4 w-4" />
+                          <CreditCard className="h-4 w-4 mr-2" />
                       )}
+                      Configure Payment
                     </Button>
                     <Button
                       variant="destructive"
-                      size="icon"
                       onClick={() => handleDeleteClick(customer)}
-                      title="Delete Customer"
+                      className="flex items-center"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete
                     </Button>
                   </div>
                 </TableCell>
