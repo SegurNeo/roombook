@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Trash2, Pencil, ChevronLeft, ChevronRight, Plus, Eye } from "lucide-react";
+import { Trash2, Pencil, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -273,9 +273,6 @@ export function AssetsTable({ assets, selectedColumns, columnOptions, onDelete, 
                       size="sm"
                       onClick={() => navigate(`/assets/${asset.id}`)}
                     >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                    <Button variant="secondary" size="sm">
                       <Pencil className="h-4 w-4" />
                       <span className="ml-2">Edit</span>
                     </Button>

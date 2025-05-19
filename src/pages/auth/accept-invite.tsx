@@ -9,21 +9,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 type InviteStatus = "loading" | "valid" | "invalid_token" | "already_member" | "expired" | "error";
 
-// Define the expected structure for the organization within the invite
-interface InvitedOrganization {
-  name: string;
-  id: string;
-}
-
-// Define the expected structure for the invite response
-interface InviteResponse {
-  email: string;
-  role_type: string;
-  status: string;
-  expires_at: string;
-  organizations: InvitedOrganization | null; // Define the nested type
-}
-
 interface InviteDetails {
   email: string;
   role_type: string;
@@ -51,48 +36,36 @@ export function AcceptInvite() {
 
       try {
         setStatus("loading");
-        // Explicitly type the expected response
-        const { data: invite, error: inviteError } = await supabase
-          .from("team_invites")
-          .select(`
-            email,
-            role_type,
-            status,
-            expires_at,
-            organizations ( name, id )
-          `)
-          .eq("id", token)
-          .maybeSingle<InviteResponse>(); // Use the defined type
+        
+        // Use the new validate_team_invite function
+        const { data: validation, error: validationError } = await supabase
+          .rpc('validate_team_invite', { invite_token: token });
 
-        if (inviteError) throw inviteError;
+        if (validationError) throw validationError;
 
-        if (!invite) {
-          setStatus("invalid_token");
-          setErrorMessage("Invalid or expired invitation token.");
+        if (!validation.valid) {
+          setStatus(validation.error.toLowerCase() as InviteStatus);
+          setErrorMessage(validation.message);
           return;
         }
 
-        if (invite.status !== 'pending' && invite.status !== 'sent') {
-             setStatus("invalid_token"); // Or a more specific status like 'already_processed'
-             setErrorMessage(`This invitation has already been ${invite.status}.`);
-             return;
-        }
-        
-        const expiresAt = new Date(invite.expires_at);
-        if (expiresAt < new Date()) {
-            setStatus("expired");
-            setErrorMessage("This invitation has expired.");
-            // Optional: Update status to 'expired' in DB if not already done by a cron job
-            return;
-        }
+        const invite = validation.invite;
 
-        // If validation passed (basic checks: token exists, not expired, status ok)
+        // Get organization details
+        const { data: org, error: orgError } = await supabase
+          .from('organizations')
+          .select('name, id')
+          .eq('id', invite.organization_id)
+          .single();
+
+        if (orgError) throw orgError;
+
         setStatus("valid");
         setInviteDetails({
           email: invite.email,
           role_type: invite.role_type,
-          organization_name: invite.organizations?.name || 'the organization',
-          organization_id: invite.organizations?.id || '',
+          organization_name: org.name || 'the organization',
+          organization_id: org.id
         });
 
       } catch (error: any) {

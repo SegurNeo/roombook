@@ -185,7 +185,7 @@ export function RentCheck() {
       if (data?.error) {
         throw new Error(data.error.details || data.error.message || "Failed to mark as paid manually");
       }
-      
+
       toast({
         title: "Status Updated",
         description: data?.message || "Transaction marked as paid manually.",

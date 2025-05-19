@@ -101,14 +101,22 @@ export function Team() {
       setOrganization(org);
       setNewOrgName(org.name);
 
-      // Get team members
-      const { data: members, error: membersError } = await supabase
-        .from('profiles')
-        .select('id, full_name, role_type')
-        .eq('organization_id', profile.organization_id);
+      // Get team members with real-time subscription
+      const teamMembersSubscription = supabase
+        .channel('team-members')
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'profiles',
+          filter: `organization_id=eq.${profile.organization_id}`
+        }, () => {
+          // Refresh team members when changes occur
+          fetchTeamMembers(profile.organization_id);
+        })
+        .subscribe();
 
-      if (membersError) throw membersError;
-      setTeamMembers(members || []);
+      // Initial fetch of team members
+      await fetchTeamMembers(profile.organization_id);
 
       // Get team invites
       const { data: invites, error: invitesError } = await supabase
@@ -121,6 +129,11 @@ export function Team() {
       if (invitesError) throw invitesError;
       setTeamInvites(invites || []);
 
+      // Cleanup subscription on component unmount
+      return () => {
+        teamMembersSubscription.unsubscribe();
+      };
+
     } catch (error: any) {
       console.error('Error fetching team:', error);
       toast({
@@ -131,6 +144,20 @@ export function Team() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchTeamMembers = async (organizationId: string) => {
+    const { data: members, error: membersError } = await supabase
+      .from('profiles')
+      .select('id, full_name, role_type')
+      .eq('organization_id', organizationId);
+
+    if (membersError) {
+      console.error('Error fetching team members:', membersError);
+      return;
+    }
+
+    setTeamMembers(members || []);
   };
 
   const handleInvite = async () => {
