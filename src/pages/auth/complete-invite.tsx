@@ -5,40 +5,24 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, CheckCircle, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-type Status = 'loading' | 'success' | 'error';
+type InviteStatus = 'loading' | 'valid' | 'invalid_token' | 'expired' | 'error';
 
 export function CompleteInvite() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [status, setStatus] = useState<Status>('loading');
-  const [message, setMessage] = useState<string>('Processing your invitation...');
+  const [status, setStatus] = useState<InviteStatus>('loading');
+  const [message, setMessage] = useState<string>('');
 
   const token = searchParams.get('token');
 
   useEffect(() => {
     const acceptInvite = async () => {
       if (!token) {
-        setMessage('Invalid invitation link: No token found.');
-        setStatus('error');
-        toast({ title: 'Error', description: 'Missing invitation token.', variant: 'destructive' });
+        setStatus('invalid_token');
+        setMessage('No invitation token provided.');
         return;
       }
-
-      console.log('CompleteInvite page: Attempting to accept invite with token:', token);
-
-      // Optional: Verify user session exists, though Supabase redirect should ensure this
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-           setMessage('Authentication error. Please log in again.');
-           setStatus('error');
-           toast({ title: 'Error', description: 'User session not found.', variant: 'destructive' });
-           // Redirect to login?
-           setTimeout(() => navigate('/auth/login'), 3000);
-           return;
-      }
-      console.log('User session confirmed.');
-
 
       try {
         const { error: inviteError } = await supabase.rpc('accept_team_invite', {
@@ -47,41 +31,61 @@ export function CompleteInvite() {
 
         if (inviteError) {
           console.error('Error calling accept_team_invite RPC:', inviteError);
-          // Provide more specific feedback based on common errors if possible
-          if (inviteError.message.includes('already a member')) {
-               setMessage('You are already a member of this team.');
-          } else if (inviteError.message.includes('Invalid token')) {
-               setMessage('This invitation link is invalid or has expired.');
+          
+          // Handle specific error cases
+          if (inviteError.message.includes('INVALID_INVITE_TOKEN')) {
+            setStatus('invalid_token');
+            setMessage('This invitation link is invalid.');
+          } else if (inviteError.message.includes('EXPIRED_INVITE_TOKEN')) {
+            setStatus('expired');
+            setMessage('This invitation has expired.');
+          } else if (inviteError.message.includes('INVITE_ALREADY_PROCESSED')) {
+            setStatus('invalid_token');
+            setMessage('This invitation has already been processed.');
+          } else if (inviteError.message.includes('EMAIL_MISMATCH')) {
+            setStatus('error');
+            setMessage('You must be logged in with the email address that received the invitation.');
+          } else if (inviteError.message.includes('USER_ALREADY_MEMBER')) {
+            setStatus('error');
+            setMessage('You are already a member of this organization.');
+          } else if (inviteError.message.includes('PROFILE_UPDATE_FAILED')) {
+            setStatus('error');
+            setMessage('Failed to update your profile. Please try again or contact support.');
           } else {
-              setMessage(`Failed to accept invitation: ${inviteError.message}`);
+            setStatus('error');
+            setMessage('An unexpected error occurred. Please try again or contact support.');
           }
-          setStatus('error');
+
           toast({
             title: 'Invitation Error',
-            description: message, // Use the derived message
+            description: message,
             variant: 'destructive',
             duration: 7000,
           });
         } else {
-          console.log('Invitation accepted successfully via RPC.');
+          setStatus('valid');
           setMessage('Welcome! You have successfully joined the team.');
-          setStatus('success');
-          toast({ title: 'Success', description: 'Invitation accepted!' });
+          toast({ 
+            title: 'Success', 
+            description: 'Invitation accepted! Redirecting to dashboard...' 
+          });
           // Redirect to dashboard after a short delay
           setTimeout(() => navigate('/', { replace: true }), 2000);
         }
       } catch (error: any) {
         console.error('Unexpected error during invite acceptance:', error);
-        setMessage('An unexpected error occurred. Please try again later or contact support.');
         setStatus('error');
-        toast({ title: 'Error', description: message, variant: 'destructive' });
+        setMessage('An unexpected error occurred. Please try again later or contact support.');
+        toast({ 
+          title: 'Error', 
+          description: message, 
+          variant: 'destructive' 
+        });
       }
     };
 
     acceptInvite();
-    // Run only once on mount, dependencies are stable
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, toast, navigate]); // Include navigate in deps
+  }, [token, toast, navigate, message]);
 
   const renderStatus = () => {
     switch (status) {
@@ -93,7 +97,7 @@ export function CompleteInvite() {
             <p className="text-muted-foreground">Please wait...</p>
           </>
         );
-      case 'success':
+      case 'valid':
         return (
           <>
             <CheckCircle className="h-16 w-16 text-green-500 mb-4" />
