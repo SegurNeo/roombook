@@ -13,7 +13,7 @@ import { supabase } from "@/lib/supabase";
 import { Loader2, CheckCircle2 } from "lucide-react";
 import { UserFilter } from "@/components/user-filter";
 import { NewCustomer } from "./new-customer";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 
 interface CustomersProps { }
 
@@ -56,8 +56,7 @@ export function Customers({ }: CustomersProps) {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const { toast } = useToast();
   const [showNewCustomerForm, setShowNewCustomerForm] = useState(false);
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   useEffect(() => {
     if (!showNewCustomerForm) {
@@ -73,10 +72,12 @@ export function Customers({ }: CustomersProps) {
         description: "El método de pago SEPA ha sido configurado exitosamente.",
         variant: "default",
       });
-      // Remove the query parameter
-      navigate('/customers', { replace: true });
+      // Remove the query parameter using setSearchParams
+      const newSearchParams = new URLSearchParams(searchParams.toString()); // Create a mutable copy
+      newSearchParams.delete('setup_success');
+      setSearchParams(newSearchParams, { replace: true });
     }
-  }, [searchParams, navigate, toast]);
+  }, [searchParams, setSearchParams, toast]); // Add setSearchParams to dependencies
 
   const fetchCustomers = async () => {
     try {
@@ -202,7 +203,6 @@ export function Customers({ }: CustomersProps) {
               onComplete={(customerData) => {
                   console.log('New customer created:', customerData);
                   setShowNewCustomerForm(false);
-                  navigate('/customers');
               }}
           />
       );

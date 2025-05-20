@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Sidebar } from './components/sidebar';
+import ErrorBoundary from './components/ErrorBoundary';
 import { Assets } from './pages/assets';
 import { Customers } from './pages/customers';
 import { Bookings } from './pages/bookings';
@@ -137,7 +138,14 @@ function App() {
                        <Sidebar />
                        <main className="flex-1 overflow-y-auto p-8">
                          <Routes>
-                           <Route path="/customers/*" element={<Customers />} />
+                           <Route 
+                             path="/customers"
+                             element={
+                               <ErrorBoundary fallback={<div>Error al cargar la página de clientes. Por favor, inténtalo de nuevo o contacta con soporte.</div>}>
+                                 <Customers />
+                               </ErrorBoundary>
+                             }
+                           />
                            <Route path="/customers/:id" element={<CustomerDetails />} />
                            
                            {/* Asset creation flow */}
