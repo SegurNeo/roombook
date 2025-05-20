@@ -37,11 +37,16 @@ export function AcceptInvite() {
       try {
         setStatus("loading");
         
-        // Use the new validate_team_invite function
+        // Use the validate_team_invite function with the token
         const { data: validation, error: validationError } = await supabase
           .rpc('validate_team_invite', { invite_token: token });
 
-        if (validationError) throw validationError;
+        if (validationError) {
+          console.error("Error validating invite:", validationError);
+          setStatus("error");
+          setErrorMessage(validationError.message || "Failed to validate invitation.");
+          return;
+        }
 
         if (!validation.valid) {
           setStatus(validation.error.toLowerCase() as InviteStatus);

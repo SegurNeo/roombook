@@ -46,7 +46,7 @@ BEGIN
         'inviter_name', inviter_name,
         'role_type', role_type,
         'invite_url', current_setting('app.settings.site_url') || '/accept-invite?token=' || 
-          encode(
+          invite_id::text || ':' || encode(
             crypto.hmac(
               invite_id::text || recipient_email,
               current_setting('app.settings.jwt_secret'),

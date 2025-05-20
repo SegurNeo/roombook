@@ -144,7 +144,13 @@ export function CustomersTable({ customers, selectedColumns, columnOptions, onDe
       console.log(`Requesting SEPA setup for Supabase customer ID: ${customer.id}`);
       const { data, error: functionError } = await supabase.functions.invoke(
         'create-sepa-setup-session',
-        { body: { supabase_customer_id: customer.id } }
+        { 
+          body: { 
+            supabase_customer_id: customer.id,
+            success_url: `${window.location.origin}/customers?setup_success=true`,
+            cancel_url: `${window.location.origin}/customers`
+          } 
+        }
       );
 
       if (functionError) {
@@ -177,7 +183,7 @@ export function CustomersTable({ customers, selectedColumns, columnOptions, onDe
         description: error.message || "Could not initiate SEPA configuration. Please try again.",
         variant: "destructive",
       });
-       setConfiguringCustomerId(null);
+      setConfiguringCustomerId(null);
     }
   };
 

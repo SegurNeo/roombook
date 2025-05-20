@@ -10,10 +10,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
-import { Loader2 } from "lucide-react";
+import { Loader2, CheckCircle2 } from "lucide-react";
 import { UserFilter } from "@/components/user-filter";
 import { NewCustomer } from "./new-customer";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 interface CustomersProps { }
 
@@ -37,6 +37,7 @@ export function Customers({ }: CustomersProps) {
   const [showFilters, setShowFilters] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showColumnSelector, setShowColumnSelector] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [timePeriod, setTimePeriod] = useState("month");
   const [dateRange, setDateRange] = useState<{
     from: Date | undefined;
@@ -56,12 +57,26 @@ export function Customers({ }: CustomersProps) {
   const { toast } = useToast();
   const [showNewCustomerForm, setShowNewCustomerForm] = useState(false);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   useEffect(() => {
     if (!showNewCustomerForm) {
        fetchCustomers();
     }
   }, [selectedUserId, showNewCustomerForm]);
+
+  useEffect(() => {
+    const setup_success = searchParams.get('setup_success');
+    if (setup_success === 'true') {
+      toast({
+        title: "¡Configuración SEPA completada!",
+        description: "El método de pago SEPA ha sido configurado exitosamente.",
+        variant: "default",
+      });
+      // Remove the query parameter
+      navigate('/customers', { replace: true });
+    }
+  }, [searchParams, navigate, toast]);
 
   const fetchCustomers = async () => {
     try {
@@ -382,6 +397,25 @@ export function Customers({ }: CustomersProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {showSuccessModal && (
+        <Dialog open={showSuccessModal} onOpenChange={setShowSuccessModal}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <CheckCircle2 className="h-6 w-6 text-green-500" />
+                Configuración SEPA Completada
+              </DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <p>El método de pago SEPA ha sido configurado exitosamente para este cliente.</p>
+            </div>
+            <DialogFooter>
+              <Button onClick={() => setShowSuccessModal(false)}>Aceptar</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

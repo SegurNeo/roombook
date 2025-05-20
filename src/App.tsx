@@ -136,8 +136,14 @@ function App() {
                      <div className="min-h-screen flex bg-background">
                        <Sidebar />
                        <main className="flex-1 overflow-y-auto p-8">
+                         <Routes>
+                           <Route path="/customers/*" element={<Customers />} />
+                           <Route path="/customers/:id" element={<CustomerDetails />} />
+                           
+                           {/* Asset creation flow */}
                            {showNewAsset && !showNewAssetRooms && !showAssetPreview && (
-                                <NewAsset
+                                <Route path="*" element={
+                                  <NewAsset
                                     onBack={() => setShowNewAsset(false)}
                                     onContinue={(data, numberOfRooms) => {
                                         setAssetData(data);
@@ -145,46 +151,51 @@ function App() {
                                         setShowNewAsset(false);
                                         setShowNewAssetRooms(true);
                                     }}
-                                />
+                                  />
+                                } />
                            )}
                            {showNewAssetRooms && !showAssetPreview && (
-                               <NewAssetRooms
-                                  onBack={() => {setShowNewAssetRooms(false); setShowNewAsset(true);}}
-                                  onComplete={(roomsData) => {
-                                    if (assetData) {
-                                        setAssetData({ ...assetData, rooms: roomsData });
-                                        setShowNewAssetRooms(false);
-                                        setShowAssetPreview(true);
-                                    }
-                                  }}
-                                  totalRooms={totalRooms}
-                               />
+                               <Route path="*" element={
+                                 <NewAssetRooms
+                                    onBack={() => {setShowNewAssetRooms(false); setShowNewAsset(true);}}
+                                    onComplete={(roomsData) => {
+                                      if (assetData) {
+                                          setAssetData({ ...assetData, rooms: roomsData });
+                                          setShowNewAssetRooms(false);
+                                          setShowAssetPreview(true);
+                                      }
+                                    }}
+                                    totalRooms={totalRooms}
+                                 />
+                               } />
                            )}
                            {showAssetPreview && assetData && (
-                               <AssetPreview
-                                  onBack={() => {setShowAssetPreview(false); setShowNewAssetRooms(true);}}
-                                  onConfirm={handleNewAssetComplete}
-                                  assetData={assetData}
-                               />
+                               <Route path="*" element={
+                                 <AssetPreview
+                                    onBack={() => {setShowAssetPreview(false); setShowNewAssetRooms(true);}}
+                                    onConfirm={handleNewAssetComplete}
+                                    assetData={assetData}
+                                 />
+                               } />
                            )}
 
+                           {/* Regular routes */}
                            {!showNewAsset && !showNewAssetRooms && !showAssetPreview && (
-                               <Routes>
-                                  <Route path="/assets/:id" element={<AssetDetails />} />
-                                  <Route path="/customers/:id" element={<CustomerDetails />} />
-                                  <Route path="/assets" element={<Assets onNewAsset={() => setShowNewAsset(true)} />} />
-                                  <Route path="/customers" element={<Customers />} />
-                                  <Route path="/bookings" element={<Bookings />} />
-                                  <Route path="/rent-check" element={<RentCheck />} />
-                                  <Route path="/settings" element={<Settings />} />
-                                  <Route path="/profile" element={<Profile />} />
-                                  <Route path="/team" element={<Team />} />
-                                  <Route path="/notifications" element={<Notifications />} />
-                                  <Route path="/report" element={<Report />} />
-                                  <Route path="/" element={<Navigate to="/assets" replace />} />
-                                  <Route path="*" element={<div>404 Not Found</div>} />
-                               </Routes>
+                             <>
+                                <Route path="/assets/:id" element={<AssetDetails />} />
+                                <Route path="/assets" element={<Assets onNewAsset={() => setShowNewAsset(true)} />} />
+                                <Route path="/bookings" element={<Bookings />} />
+                                <Route path="/rent-check" element={<RentCheck />} />
+                                <Route path="/settings" element={<Settings />} />
+                                <Route path="/profile" element={<Profile />} />
+                                <Route path="/team" element={<Team />} />
+                                <Route path="/notifications" element={<Notifications />} />
+                                <Route path="/report" element={<Report />} />
+                                <Route path="/" element={<Navigate to="/assets" replace />} />
+                                <Route path="*" element={<div>404 Not Found</div>} />
+                             </>
                            )}
+                         </Routes>
                        </main>
                        <Toaster />
                      </div>
