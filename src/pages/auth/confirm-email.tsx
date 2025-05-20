@@ -1,20 +1,17 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Mail, Loader2, CheckCircle2, XCircle } from "lucide-react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
 
 export function ConfirmEmail() {
   const navigate = useNavigate();
-  const location = useLocation();
   const { toast } = useToast();
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationStatus, setVerificationStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [code, setCode] = useState("");
   const [email, setEmail] = useState<string | null>(null);
-
-  const inviteToken = location.state?.inviteToken;
 
   useEffect(() => {
     const verificationEmail = sessionStorage.getItem('verificationEmail');
@@ -36,32 +33,32 @@ export function ConfirmEmail() {
       const { data, error } = await supabase.auth.verifyOtp({
         email,
         token: code,
-        type: 'email',
+        type: 'signup',
       });
 
       if (error) throw error;
 
       if (data.user) {
         setVerificationStatus('success');
-        // Show success animation for 1.5 seconds before redirecting
-        await new Promise(resolve => setTimeout(resolve, 1500));
         toast({
-          title: "Email verified",
-          description: "Your account has been successfully verified.",
+          title: "Email verificado",
+          description: "Tu cuenta ha sido verificada con éxito. Redirigiendo...",
         });
         sessionStorage.removeItem('verificationEmail');
-
-        if (inviteToken) {
-          console.log('OTP verified, invite token found, navigating to complete-invite');
-          navigate(`/auth/complete-invite?token=${inviteToken}`, { replace: true });
-        } else {
-          console.log('OTP verified, no invite token, navigating to onboarding');
-          navigate("/auth/onboarding");
-        }
+        
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      } else {
+        setVerificationStatus('error');
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        setVerificationStatus('idle');
+        toast({
+            title: "Verificación Podría Estar Incompleta",
+            description: "El código fue aceptado, pero revisa si necesitas iniciar sesión.",
+            variant: "default",
+        });
       }
     } catch (error: any) {
       setVerificationStatus('error');
-      // Show error animation for 1.5 seconds before resetting
       await new Promise(resolve => setTimeout(resolve, 1500));
       setVerificationStatus('idle');
       toast({

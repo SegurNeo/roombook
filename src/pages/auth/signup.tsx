@@ -82,36 +82,60 @@ export function SignUp() {
     try {
       // Prepare options for signUp
       const signUpOptions: { emailRedirectTo?: string; data?: { [key: string]: any } } = {};
-      // REMOVED emailRedirectTo logic
-      // if (inviteToken) {
-      //   // Redirect to complete-invite page after email verification
-      //   signUpOptions.emailRedirectTo = `${window.location.origin}/auth/complete-invite?token=${inviteToken}`;
-      //   console.log('Signup initiated with invite, setting emailRedirectTo:', signUpOptions.emailRedirectTo);
-      // }
-      
-      // Add full_name to user metadata
       signUpOptions.data = { full_name: fullName }; 
 
-      const { error } = await supabase.auth.signUp({
+      if (inviteToken) {
+        // Restore emailRedirectTo for invite flow
+        signUpOptions.emailRedirectTo = `${window.location.origin}/auth/complete-invite?token=${inviteToken}`;
+        console.log('Signup initiated with invite, setting emailRedirectTo:', signUpOptions.emailRedirectTo);
+      }
+      
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: signUpOptions, // Options now only contain metadata
+        options: signUpOptions,
       });
 
       if (error) throw error;
 
-      // Handle response - User needs to verify email via OTP
-      toast({
-        title: "Revisa tu correo electrónico",
-        description: "Hemos enviado un código de verificación. Por favor, introdúcelo en la siguiente pantalla.",
-        duration: 7000, // Give user time to read
-      });
-
-      // Store email for verification screen and navigate
-      sessionStorage.setItem('verificationEmail', email);
-      const stateToPass = inviteToken ? { inviteToken } : undefined;
-      console.log('Navigating to confirm-email with state:', stateToPass);
-      navigate('/auth/confirm-email', { state: stateToPass });
+      // Handle response
+      if (data.session) {
+        // If auto-confirm is on OR a session is returned immediately (e.g. user already confirmed but not fully through invite)
+        // And there was an invite token, redirect to complete-invite directly
+        if (inviteToken) {
+          console.log('User signed up and session created (or auto-confirmed), redirecting to complete-invite with token:', inviteToken);
+          navigate(`/auth/complete-invite?token=${inviteToken}`, { replace: true });
+        } else {
+          // Navigate to a default page or onboarding if no invite token
+          // This case might need adjustment based on whether you always expect email verification
+          navigate('/', { replace: true }); 
+        }
+      } else if (data.user && !data.session) {
+        // User needs to verify email (OTP or link via email)
+        // Supabase will handle redirection to `emailRedirectTo` after verification
+        toast({
+          title: "Revisa tu correo electrónico",
+          description: "Hemos enviado un correo de confirmación. Por favor, sigue las instrucciones para activar tu cuenta y completar la invitación si aplica.",
+          duration: 9000,
+        });
+        // If you have a custom OTP page (/auth/confirm-email) and are NOT relying on Supabase's email link:
+        // You still need to navigate the user there.
+        // The `emailRedirectTo` will be used by Supabase AFTER `verifyOtp` is successful on that page.
+        sessionStorage.setItem('verificationEmail', email);
+        // Pass inviteToken to confirm-email page if it needs to reconstruct the complete-invite URL later
+        // However, with emailRedirectTo set, this might not be strictly necessary for confirm-email to pass it on,
+        // as Supabase should handle the final redirect.
+        const stateToPass = inviteToken ? { inviteToken,  requiresOtp: true } : { requiresOtp: true };
+        console.log('Navigating to confirm-email, Supabase will use emailRedirectTo after OTP verification. State:', stateToPass);
+        navigate('/auth/confirm-email', { state: stateToPass });
+      } else {
+        // Fallback or unexpected state
+        toast({
+          title: "Proceso de registro iniciado",
+          description: "Por favor, sigue las instrucciones enviadas a tu correo electrónico.",
+          duration: 7000
+        });
+      }
 
     } catch (error: any) {
       console.error("Signup error:", error);

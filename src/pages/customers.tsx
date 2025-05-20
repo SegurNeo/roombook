@@ -13,7 +13,7 @@ import { supabase } from "@/lib/supabase";
 import { Loader2, CheckCircle2 } from "lucide-react";
 import { UserFilter } from "@/components/user-filter";
 import { NewCustomer } from "./new-customer";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useLocation } from "react-router-dom";
 
 interface CustomersProps { }
 
@@ -57,8 +57,12 @@ export function Customers({ }: CustomersProps) {
   const { toast } = useToast();
   const [showNewCustomerForm, setShowNewCustomerForm] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+
+  console.log('[Customers.tsx] Rendering - Path:', location.pathname, 'Search Params:', searchParams.toString());
 
   useEffect(() => {
+    console.log('[Customers.tsx] useEffect for fetchCustomers - showNewCustomerForm:', showNewCustomerForm);
     if (!showNewCustomerForm) {
        fetchCustomers();
     }
@@ -66,6 +70,7 @@ export function Customers({ }: CustomersProps) {
 
   useEffect(() => {
     const setup_success = searchParams.get('setup_success');
+    console.log('[Customers.tsx] useEffect for setup_success - setup_success param:', setup_success);
     if (setup_success === 'true') {
       toast({
         title: "¡Configuración SEPA completada!",

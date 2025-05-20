@@ -8,11 +8,28 @@ import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 
 export function Login() {
+  const location = useLocation();
+  console.log('[Login.tsx] Rendering - Path:', location.pathname, 'State:', location.state);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
-  const location = useLocation();
+
+  // Check for session on mount
+  useEffect(() => {
+    console.log('[Login.tsx] Checking for existing session on mount.');
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const from = location.state?.from?.pathname || "/";
+        console.log('[Login.tsx] Active session found. Redirecting to:', from);
+        navigate(from, { replace: true });
+      } else {
+        console.log('[Login.tsx] No active session found on mount.');
+      }
+    };
+    checkSession();
+  }, [navigate, location.state]);
 
   const inviteToken = location.state?.inviteToken;
   useEffect(() => {
@@ -51,7 +68,9 @@ export function Login() {
             title: "Welcome back!",
             description: "You have successfully signed in.",
           });
-          navigate("/", { replace: true });
+          const from = location.state?.from?.pathname || "/";
+          console.log('[Login.tsx] Login successful. Redirecting to:', from);
+          navigate(from, { replace: true });
         } else {
           toast({ title: "Login successful", description: "Processing invitation..." });
         }

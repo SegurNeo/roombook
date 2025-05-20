@@ -75,32 +75,40 @@ function App() {
   const location = useLocation();
 
   useEffect(() => {
+    console.log('[App.tsx] useEffect for auth state change triggered');
     const getSession = async () => {
+        console.log('[App.tsx] getSession called');
         setLoadingAuth(true);
         try {
-            const { data: { session }, error } = await supabase.auth.getSession();
+            const { data: { session: currentSession }, error } = await supabase.auth.getSession();
             if (error) throw error;
-            setSession(session);
+            console.log('[App.tsx] getSession - currentSession:', currentSession ? 'Exists' : 'null');
+            setSession(currentSession);
         } catch (error: any) {
             toast({ title: "Auth Error", description: `Failed to get session: ${error.message}`, variant: "destructive"});
-            console.error("Auth error:", error);
+            console.error("[App.tsx] Auth error in getSession:", error);
             setSession(null);
         } finally {
             setLoadingAuth(false);
+            console.log('[App.tsx] getSession - loadingAuth set to false');
         }
     };
 
     getSession();
 
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-      console.log("Auth State Change:", _event, session ? 'Got session' : 'No session');
-      setSession(session);
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      console.log("[App.tsx] onAuthStateChange - Event:", _event, "Session:", newSession ? 'Exists' : 'null');
+      setSession(newSession);
+      // No setLoadingAuth(false) here, getSession handles initial load.
     });
 
     return () => {
+      console.log('[App.tsx] Unsubscribing auth listener');
       authListener?.subscription.unsubscribe();
     };
   }, [toast]);
+
+  console.log('[App.tsx] Rendering - Path:', location.pathname, 'Session:', session ? 'Exists' : 'null', 'LoadingAuth:', loadingAuth);
 
   const handleNewAssetComplete = () => {
       setShowAssetPreview(false);
@@ -110,6 +118,7 @@ function App() {
   };
 
   if (loadingAuth) {
+     console.log('[App.tsx] Render: Loading auth...');
      return (
         <div className="flex items-center justify-center h-screen">
           <div>Loading session...</div>
