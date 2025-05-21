@@ -52,11 +52,11 @@ export function ConfirmEmail() {
         await new Promise(resolve => setTimeout(resolve, 1500));
 
         if (inviteToken) {
-          console.log('OTP verified, invite token found via state, navigating to complete-invite:', inviteToken);
+          console.log('OTP verified (invite flow), invite token found via state, navigating to complete-invite:', inviteToken);
           navigate(`/auth/complete-invite?token=${inviteToken}`, { replace: true });
         } else {
-          console.log('OTP verified, no invite token. Navigating to / (or allow Supabase default redirect)');
-          navigate("/", { replace: true });
+          console.log('OTP verified (normal signup), no invite token. Navigating to /auth/onboarding');
+          navigate("/auth/onboarding", { replace: true });
         }
       } else {
         setVerificationStatus('error');

@@ -85,10 +85,13 @@ export function SignUp() {
       signUpOptions.data = { full_name: fullName }; 
 
       if (inviteToken) {
-        // Restore emailRedirectTo for invite flow
+        // For invite flow, redirect to complete-invite after email verification
         signUpOptions.emailRedirectTo = `${window.location.origin}/auth/complete-invite?token=${inviteToken}`;
-        console.log('Signup initiated with invite, setting emailRedirectTo:', signUpOptions.emailRedirectTo);
+        console.log('Signup (invite flow) initiated, setting emailRedirectTo:', signUpOptions.emailRedirectTo);
       }
+      // For normal signup, emailRedirectTo is not set here.
+      // Supabase will redirect to SITE_URL after OTP/link verification,
+      // and then confirm-email.tsx will navigate to /auth/onboarding.
       
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -100,39 +103,38 @@ export function SignUp() {
 
       // Handle response
       if (data.session) {
-        // If auto-confirm is on OR a session is returned immediately (e.g. user already confirmed but not fully through invite)
-        // And there was an invite token, redirect to complete-invite directly
+        // Session created immediately (e.g., auto-confirm ON or user already verified)
         if (inviteToken) {
-          console.log('User signed up and session created (or auto-confirmed), redirecting to complete-invite with token:', inviteToken);
+          console.log('User signed up (invite, session created), redirecting to complete-invite with token:', inviteToken);
           navigate(`/auth/complete-invite?token=${inviteToken}`, { replace: true });
         } else {
-          // Navigate to a default page or onboarding if no invite token
-          // This case might need adjustment based on whether you always expect email verification
-          navigate('/', { replace: true }); 
+          // Normal signup, session created immediately
+          console.log('User signed up (normal, session created), redirecting to onboarding.');
+          navigate('/auth/onboarding', { replace: true }); 
         }
       } else if (data.user && !data.session) {
         // User needs to verify email (OTP or link via email)
-        // Supabase will handle redirection to `emailRedirectTo` after verification
         toast({
           title: "Revisa tu correo electrónico",
-          description: "Hemos enviado un correo de confirmación. Por favor, sigue las instrucciones para activar tu cuenta y completar la invitación si aplica.",
+          description: "Hemos enviado un correo de confirmación. Por favor, sigue las instrucciones para activar tu cuenta.",
           duration: 9000,
         });
-        // If you have a custom OTP page (/auth/confirm-email) and are NOT relying on Supabase's email link:
-        // You still need to navigate the user there.
-        // The `emailRedirectTo` will be used by Supabase AFTER `verifyOtp` is successful on that page.
+        
         sessionStorage.setItem('verificationEmail', email);
-        // Pass inviteToken to confirm-email page if it needs to reconstruct the complete-invite URL later
-        // However, with emailRedirectTo set, this might not be strictly necessary for confirm-email to pass it on,
-        // as Supabase should handle the final redirect.
         const stateToPass = inviteToken ? { inviteToken,  requiresOtp: true } : { requiresOtp: true };
-        console.log('Navigating to confirm-email, Supabase will use emailRedirectTo after OTP verification. State:', stateToPass);
+        
+        if (inviteToken) {
+          console.log('Navigating to confirm-email (invite flow). Supabase will use emailRedirectTo after OTP. State:', stateToPass);
+        } else {
+          console.log('Navigating to confirm-email (normal signup). confirm-email.tsx will redirect to onboarding after OTP. State:', stateToPass);
+        }
         navigate('/auth/confirm-email', { state: stateToPass });
       } else {
-        // Fallback or unexpected state
+        // Fallback or unexpected state from Supabase
+        console.warn('Unexpected signUp response:', data);
         toast({
           title: "Proceso de registro iniciado",
-          description: "Por favor, sigue las instrucciones enviadas a tu correo electrónico.",
+          description: "Por favor, sigue las instrucciones enviadas a tu correo electrónico o intenta iniciar sesión.",
           duration: 7000
         });
       }
