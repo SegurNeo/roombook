@@ -104,7 +104,7 @@ export function CustomerSearch({ onSelect }: CustomerSearchProps) {
                   <CommandItem
                     key={customer.id}
                     value={value}
-                    onSelect={handleSelect}
+                    onSelect={() => handleSelect(value)}
                     className="cursor-pointer"
                   >
                     <Check
