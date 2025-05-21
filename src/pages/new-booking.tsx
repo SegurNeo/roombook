@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Loader2, Check, Calendar as CalendarIcon, Share, Mail, MessageSquare, Send, CreditCard } from "lucide-react";
-import { format, addMonths, isBefore, isAfter, differenceInMonths, startOfToday, endOfMonth, differenceInDays, startOfMonth } from "date-fns";
+import { format, addMonths, isBefore, isAfter, differenceInMonths, startOfToday, endOfMonth, startOfMonth, differenceInCalendarDays } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -58,69 +58,106 @@ export function NewBooking({ onBack, onComplete }: NewBookingProps) {
     if (rentCalculation === "full") {
       return baseRent;
     } else {
-      const daysInMonth = differenceInDays(endOfMonth(dateRange.from), dateRange.from) + 1;
-      const totalDaysInMonth = differenceInDays(endOfMonth(dateRange.from), startOfMonth(dateRange.from)) + 1;
-      return (baseRent / totalDaysInMonth) * daysInMonth;
+      const daysInFirstPeriod = differenceInCalendarDays(endOfMonth(dateRange.from), dateRange.from) + 1;
+      const totalDaysInMonthOfEntry = differenceInCalendarDays(endOfMonth(dateRange.from), startOfMonth(dateRange.from)) + 1;
+      if (totalDaysInMonthOfEntry === 0) return baseRent;
+      return (baseRent / totalDaysInMonthOfEntry) * daysInFirstPeriod;
     }
   };
 
   const generatePaymentTimeline = () => {
     if (!dateRange.from || !dateRange.to || !rentPrice) return [];
-    
-    const timeline = [];
-    const firstMonthRent = calculateFirstMonthRent();
-    const baseRent = parseFloat(rentPrice);
-    const depositAmount = baseRent * parseInt(depositMonths);
-    
-    timeline.push({
-      date: dateRange.from,
-      type: 'Deposit',
-      amount: depositAmount,
-      description: `Security deposit (${depositMonths} months)`
-    });
 
+    const timeline = [];
+    const baseRent = parseFloat(rentPrice);
+    const calculatedDepositAmount = depositType === "months"
+        ? baseRent * parseInt(depositMonths)
+        : parseFloat(depositAmount);
+
+    if (calculatedDepositAmount > 0) {
+        timeline.push({
+            date: dateRange.from,
+            type: 'Deposit',
+            amount: calculatedDepositAmount,
+            description: depositType === "months" 
+                ? `Security deposit (${depositMonths} months)` 
+                : `Security deposit (custom amount)`
+        });
+    }
+
+    const firstMonthRent = calculateFirstMonthRent();
+    const firstPaymentDescription = rentCalculation === "natural"
+      ? `First month's rent (pro-rated for ${differenceInCalendarDays(endOfMonth(dateRange.from), dateRange.from) + 1} days)`
+      : `First month's rent (entry to ${format(addMonths(dateRange.from, 1), "PPP")})`;
+      
     timeline.push({
       date: dateRange.from,
       type: 'Rent',
       amount: firstMonthRent,
-      description: rentCalculation === "natural" 
-        ? `First month's rent (pro-rated for ${differenceInDays(endOfMonth(dateRange.from), dateRange.from) + 1} days)`
-        : "First month's rent"
+      description: firstPaymentDescription
     });
 
-    let currentDate = addMonths(startOfMonth(dateRange.from), 1);
-    while (isBefore(currentDate, dateRange.to)) {
-      timeline.push({
-        date: currentDate,
-        type: 'Rent',
-        amount: baseRent,
-        description: "Monthly rent"
-      });
-      currentDate = addMonths(currentDate, 1);
+    let nextPaymentDate;
+    if (rentCalculation === "natural") {
+      nextPaymentDate = addMonths(startOfMonth(dateRange.from), 1);
+    } else {
+      nextPaymentDate = addMonths(dateRange.from, 1);
     }
 
+    while (!isAfter(nextPaymentDate, dateRange.to)) {
+      const potentialEndOfCurrentPaymentPeriod = addMonths(nextPaymentDate, 1);
+
+      if (isAfter(potentialEndOfCurrentPaymentPeriod, dateRange.to)) {
+        const daysInLastPeriod = differenceInCalendarDays(dateRange.to, nextPaymentDate) + 1;
+
+        if (daysInLastPeriod <= 0) {
+            break; 
+        }
+
+        const totalDaysInMonthForProration = differenceInCalendarDays(endOfMonth(nextPaymentDate), startOfMonth(nextPaymentDate)) + 1;
+        const proratedAmount = totalDaysInMonthForProration > 0 
+            ? (baseRent / totalDaysInMonthForProration) * daysInLastPeriod 
+            : 0;
+        
+        if (proratedAmount > 0) { 
+            timeline.push({
+                date: nextPaymentDate,
+                type: 'Rent',
+                amount: parseFloat(proratedAmount.toFixed(2)),
+                description: `Final rent (pro-rated for ${daysInLastPeriod} days)`
+            });
+        }
+        break; 
+      } else {
+        timeline.push({
+          date: nextPaymentDate,
+          type: 'Rent',
+          amount: baseRent,
+          description: `Monthly rent`
+        });
+      }
+      nextPaymentDate = addMonths(nextPaymentDate, 1);
+    }
     return timeline;
   };
 
   const handleMonthsDurationChange = (value: string) => {
-    const months = parseInt(value);
-    if (isNaN(months) || months < 3) {
-      setMonthsDuration("3");
-      if (entryDate) {
+    setMonthsDuration(value);
+
+    if (entryDate) {
+      const parsedMonths = parseInt(value);
+
+      if (!isNaN(parsedMonths) && parsedMonths >= 0) {
         setDateRange({
           from: entryDate,
-          to: addMonths(entryDate, 3)
+          to: addMonths(entryDate, parsedMonths)
+        });
+      } else if (value === "") {
+        setDateRange({
+          from: entryDate,
+          to: entryDate
         });
       }
-      return;
-    }
-    
-    setMonthsDuration(value);
-    if (entryDate) {
-      setDateRange({
-        from: entryDate,
-        to: addMonths(entryDate, months)
-      });
     }
   };
 
@@ -217,12 +254,10 @@ export function NewBooking({ onBack, onComplete }: NewBookingProps) {
         throw new Error("User does not belong to an organization");
       }
 
-      // Calculate deposit amount based on type
       const finalDepositAmount = depositType === "months"
         ? parseFloat(rentPrice) * parseInt(depositMonths)
         : parseFloat(depositAmount);
 
-      // Create the booking
       const { data: booking, error: bookingError } = await supabase
         .from('bookings')
         .insert([{
@@ -246,18 +281,17 @@ export function NewBooking({ onBack, onComplete }: NewBookingProps) {
       if (bookingError) throw bookingError;
       if (!booking) throw new Error("Booking creation returned no data.");
 
-      // **** NUEVA LÓGICA PARA CREAR RENT_TRANSACTIONS ****
       const paymentTimeline = generatePaymentTimeline();
       if (paymentTimeline.length > 0) {
         const rentTransactionsToInsert = paymentTimeline.map(payment => ({
-          booking_id: booking.id, // ID del booking recién creado
+          booking_id: booking.id,
           customer_id: selectedCustomer.id,
           room_id: selectedRoom.id,
           organization_id: profile.organization_id,
           created_by: user.id,
-          due_date: format(payment.date, 'yyyy-MM-dd'), // Asegurar formato correcto para la BD
+          due_date: format(payment.date, 'yyyy-MM-dd'),
           amount: payment.amount,
-          type: payment.type.toLowerCase() as 'rent' | 'deposit', // 'Rent' o 'Deposit'
+          type: payment.type.toLowerCase() as 'rent' | 'deposit',
           status: paymentCollectionMethod === 'automatic' ? 'scheduled' : 'pending',
         }));
 
@@ -322,7 +356,6 @@ export function NewBooking({ onBack, onComplete }: NewBookingProps) {
           }
         }
       }
-      // **** FIN DE NUEVA LÓGICA ****
 
       toast({
         title: "Booking created",
@@ -351,11 +384,9 @@ export function NewBooking({ onBack, onComplete }: NewBookingProps) {
 
   const handleShare = async (method: 'email' | 'whatsapp' | 'sms') => {
     try {
-      // Calculate timeline and totalAmount within handleShare
       const timeline = generatePaymentTimeline();
       const totalAmount = timeline.reduce((sum, item) => sum + item.amount, 0);
 
-      // Ensure dates are defined before using format
       if (!dateRange.from || !dateRange.to) {
         throw new Error("Date range is not defined for sharing.");
       }
@@ -364,7 +395,6 @@ export function NewBooking({ onBack, onComplete }: NewBookingProps) {
         throw new Error("Notice period end date could not be calculated.");
       }
 
-      // Reformat contractData slightly to ensure no duplicates
       const contractData = {
         customer: {
           name: `${selectedCustomer.first_name} ${selectedCustomer.last_name}`,

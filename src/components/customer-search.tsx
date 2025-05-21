@@ -1,32 +1,30 @@
 import { useState, useEffect } from "react";
-import { Check, ChevronsUpDown } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+
 import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { supabase } from "@/lib/supabase";
 
+interface Customer {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  // Add other customer properties if needed
+}
+
 interface CustomerSearchProps {
-  onSelect: (customer: any) => void;
+  onSelect: (customer: Customer | null) => void;
 }
 
 export function CustomerSearch({ onSelect }: CustomerSearchProps) {
-  const [open, setOpen] = useState(false);
-  const [customers, setCustomers] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(false);
-  const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
-  const [search, setSearch] = useState("");
+  const [selectedValue, setSelectedValue] = useState<string | null>(null);
 
   useEffect(() => {
     fetchCustomers();
@@ -41,7 +39,7 @@ export function CustomerSearch({ onSelect }: CustomerSearchProps) {
         .order('first_name', { ascending: true });
 
       if (error) throw error;
-      setCustomers(data || []);
+      setCustomers((data as Customer[]) || []);
     } catch (error: any) {
       console.error('Error fetching customers:', error.message);
       setCustomers([]);
@@ -50,82 +48,42 @@ export function CustomerSearch({ onSelect }: CustomerSearchProps) {
     }
   };
 
-  const filteredCustomers = customers.filter(customer => {
-    if (!search) return true;
-    const searchValue = search.toLowerCase();
-    const fullName = `${customer.first_name} ${customer.last_name}`.toLowerCase();
-    const email = customer.email.toLowerCase();
-    return fullName.includes(searchValue) || email.includes(searchValue);
-  });
-
-  const handleSelect = (currentValue: string) => {
-    const customer = customers.find(c => 
-      `${c.first_name} ${c.last_name}`.toLowerCase() === currentValue.toLowerCase()
-    );
-    if (customer) {
-      setSelectedCustomer(customer);
-      onSelect(customer);
-      setOpen(false);
-    }
+  const handleValueChange = (customerId: string) => {
+    const selectedCustomer = customers.find(c => c.id === customerId) || null;
+    setSelectedValue(customerId);
+    onSelect(selectedCustomer);
   };
 
+  const selectedCustomerForDisplay = selectedValue
+    ? customers.find(customer => customer.id === selectedValue)
+    : null;
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          className="w-full justify-between"
-        >
-          {selectedCustomer ? (
-            `${selectedCustomer.first_name} ${selectedCustomer.last_name}`
-          ) : (
-            "Select customer..."
-          )}
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-[400px] p-0" align="start">
-        <Command shouldFilter={false}>
-          <CommandInput 
-            placeholder="Search customers..." 
-            value={search}
-            onValueChange={setSearch}
-          />
-          <CommandList>
-            <CommandEmpty>
-              {loading ? "Loading..." : "No customer found."}
-            </CommandEmpty>
-            <CommandGroup>
-              {filteredCustomers.map((customer) => {
-                const value = `${customer.first_name} ${customer.last_name}`;
-                return (
-                  <CommandItem
-                    key={customer.id}
-                    value={value}
-                    onSelect={() => handleSelect(value)}
-                    className="cursor-pointer"
-                  >
-                    <Check
-                      className={cn(
-                        "mr-2 h-4 w-4",
-                        selectedCustomer?.id === customer.id ? "opacity-100" : "opacity-0"
-                      )}
-                    />
-                    <div className="flex flex-col">
-                      <span>{value}</span>
-                      <span className="text-sm text-muted-foreground">
-                        {customer.email}
-                      </span>
-                    </div>
-                  </CommandItem>
-                );
-              })}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+    <Select
+      value={selectedValue || ""}
+      onValueChange={handleValueChange}
+      disabled={loading}
+    >
+      <SelectTrigger className="w-full justify-between">
+        <SelectValue placeholder={loading ? "Loading customers..." : "Select customer..."}>
+          {selectedCustomerForDisplay
+            ? `${selectedCustomerForDisplay.first_name} ${selectedCustomerForDisplay.last_name}`
+            : (loading ? "Loading customers..." : "Select customer...")}
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent style={{ maxHeight: '200px', overflowY: 'auto' }}>
+        {customers.length === 0 && !loading && (
+          <div className="p-4 text-sm text-muted-foreground">No customers found.</div>
+        )}
+        {customers.map((customer) => (
+          <SelectItem key={customer.id} value={customer.id}>
+            <div className="flex flex-col">
+              <span>{customer.first_name} {customer.last_name}</span>
+              <span className="text-xs opacity-75">{customer.email}</span>
+            </div>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }

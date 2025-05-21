@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Trash2, Pencil, ChevronLeft, ChevronRight, Plus, HandCoins, Repeat, Loader2 } from "lucide-react";
+import { Trash2, Pencil, ChevronLeft, ChevronRight, Plus, Loader2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import { supabase } from "@/lib/supabase";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import React from "react";
+import { useNavigate } from "react-router-dom";
 
 interface Booking {
   id: string;
@@ -59,92 +60,75 @@ export function BookingsTable({ bookings, selectedColumns, columnOptions, onNewB
   const [password, setPassword] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
-  // NEW: States for payment actions loading
-  const [markingPaidManually, setMarkingPaidManually] = useState<string | null>(null); // Store booking ID being processed
-  const [chargingSEPA, setChargingSEPA] = useState<string | null>(null); // Store booking ID being processed
+  // NEW: State for switching booking to manual collection
+  const [isSwitchingBookingToManual, setIsSwitchingBookingToManual] = useState<string | null>(null);
 
   const DELETE_PASSWORD = "delete123";
 
-  const handleMarkPaidManual = async (booking: Booking) => {
-    if (!booking.id) {
-      toast({ title: "Error", description: "Booking ID is missing.", variant: "destructive" });
-      return;
-    }
-    setMarkingPaidManually(booking.id);
-    try {
-      const { data, error } = await supabase.functions.invoke(
-        'mark-booking-paid-manual',
-        { body: { booking_id: booking.id } }
-      );
-
-      if (error) throw error;
-
-      if (data.error) { // Handle errors returned successfully from the function
-        throw new Error(data.error);
-      }
-
-      toast({
-        title: "Payment Status Updated",
-        description: data.message || `Booking ${booking.id} marked as paid manually.`,
-      });
-      // OPTIONAL: Update local state to reflect change immediately 
-      // This requires bookings state to be managed here or passed down with a setter
-      // For now, a page reload or re-fetch would be triggered by parent or user
-      // Example: onBookingUpdate(data.updated_booking); 
-      // For simplicity, we rely on parent component to refetch or user to see update after next fetch.
-      // window.location.reload(); // Simplest, but not ideal UX.
-
-    } catch (error: any) {
-      console.error("Error marking booking as paid manually:", error);
-      toast({
-        title: "Error Updating Payment",
-        description: error.message || "Could not mark booking as paid manually.",
-        variant: "destructive",
-      });
-    } finally {
-      setMarkingPaidManually(null);
-    }
+  // Helper function to format currency
+  const formatCurrency = (valueStr: string | number | null | undefined) => {
+    if (valueStr === null || valueStr === undefined) return "N/A";
+    const num = parseFloat(String(valueStr).replace(/[^0-9.-]+/g, ""));
+    if (isNaN(num)) return String(valueStr);
+    return `€${num.toFixed(2)}`;
   };
 
-  const handleChargeSEPA = async (booking: Booking) => {
+  const handleSwitchBookingCollectionToManual = async (booking: Booking) => {
     if (!booking.id) {
       toast({ title: "Error", description: "Booking ID is missing.", variant: "destructive" });
       return;
     }
-    if (booking.customer_details?.stripe_mandate_status !== 'active') {
-      toast({ title: "Mandate Error", description: "Customer SEPA mandate is not active.", variant: "destructive" });
+
+    // Check current payment status - adapt this list based on your actual statuses
+    const nonSwitchableStatuses = ['pending', 'paid_manual', 'paid_stripe']; // Statuses that shouldn't allow switching
+    if (booking.payment_status && nonSwitchableStatuses.includes(booking.payment_status)) {
+      toast({
+        title: "Action Not Allowed",
+        description: `Booking payment status is already '${booking.payment_status}'. Cannot switch to manual.`,
+        variant: "default",
+      });
       return;
     }
-    setChargingSEPA(booking.id);
+
+    setIsSwitchingBookingToManual(booking.id);
     try {
+      // IMPORTANT CAVEAT:
+      // This calls 'switch-transaction-to-manual' with booking.id.
+      // If 'switch-transaction-to-manual' strictly expects a rent_transaction_id
+      // and uses it to look up a specific rent transaction, this call might fail
+      // or not have the intended effect on the entire booking.
+      // This assumes the backend function can somehow interpret booking.id to
+      // switch the whole booking's collection method to manual.
       const { data, error } = await supabase.functions.invoke(
-        'charge-sepa-booking',
-        { body: { booking_id: booking.id } }
+        'switch-transaction-to-manual', // Using the function name as requested
+        { body: { rent_transaction_id: booking.id } } // Passing booking.id as the identifier
       );
 
       if (error) throw error;
 
-      if (data.error) { // Handle errors returned successfully from the function
-        throw new Error(data.error);
+      if (data?.error) { // Handle errors returned successfully from the function
+        throw new Error(data.error.details || data.error.message || "Failed to switch booking to manual collection");
       }
 
       toast({
-        title: "SEPA Charge Initiated",
-        description: data.message || `SEPA direct debit initiated for booking ${booking.id}. Status will update upon completion.`,
+        title: "Booking Collection Switched",
+        description: data?.message || `Booking ${booking.id} switched to manual collection. Associated transactions may be updated.`,
       });
-      // OPTIONAL: Update local state to reflect change immediately
-      // As above, relying on refetch for now.
+      
+      // TODO: Implement a more robust data refresh mechanism instead of a full reload
+      window.location.reload();
 
     } catch (error: any) {
-      console.error("Error initiating SEPA charge:", error);
+      console.error("Error switching booking to manual collection:", error);
       toast({
-        title: "Error Initiating Payment",
-        description: error.message || "Could not initiate SEPA direct debit.",
+        title: "Error Switching Collection Method",
+        description: error.message || "Could not switch booking to manual collection.",
         variant: "destructive",
       });
     } finally {
-      setChargingSEPA(null);
+      setIsSwitchingBookingToManual(null);
     }
   };
 
@@ -245,9 +229,9 @@ export function BookingsTable({ bookings, selectedColumns, columnOptions, onNewB
       case "endDate":
         return <TableCell>{booking.endDate}</TableCell>;
       case "price":
-        return <TableCell>{booking.price}</TableCell>;
+        return <TableCell>{formatCurrency(booking.price)}</TableCell>;
       case "totalRevenue":
-        return <TableCell>{booking.totalRevenue}</TableCell>;
+        return <TableCell>{formatCurrency(booking.totalRevenue)}</TableCell>;
       case "booking_status":
         return (
           <TableCell>
@@ -270,6 +254,21 @@ export function BookingsTable({ bookings, selectedColumns, columnOptions, onNewB
             </Badge>
           </TableCell>
         );
+      case "payment_type":
+        let paymentType = "N/A";
+        if (booking.payment_status === "paid_manual") {
+          paymentType = "Manual";
+        } else if (booking.payment_status?.includes("stripe")) {
+          paymentType = "Automático";
+        } else if (booking.payment_status === "pending") {
+          paymentType = "Pendiente";
+        }
+        return <TableCell>{paymentType}</TableCell>;
+      case "user":
+        if (booking.user && typeof booking.user.name === 'string') {
+          return <TableCell>{booking.user.name || 'N/A'}</TableCell>;
+        }
+        return <TableCell>-</TableCell>;
       default:
         const directValue = booking[columnId as keyof Booking];
         if (directValue !== undefined) {
@@ -303,45 +302,39 @@ export function BookingsTable({ bookings, selectedColumns, columnOptions, onNewB
                 {visibleColumns.map((column) => renderCell(booking, column.id))}
                 <TableCell>
                   <div className="flex items-center space-x-1.5">
-                    <Button variant="secondary" size="icon" title="Edit Booking" disabled>
-                      <Pencil className="h-4 w-4" />
+                    <Button 
+                      variant="secondary" 
+                      size="sm" 
+                      title="Edit Booking"
+                      onClick={() => navigate(`/bookings/${booking.id}`)}
+                    >
+                      <Pencil className="h-4 w-4 mr-2" />
+                      Edit
                     </Button>
                     
-                    {/* NEW: Mark as Paid Manually Button */}
-                    <Button 
-                      variant="outline" 
-                      size="icon" 
-                      title="Mark as Paid Manually"
-                      onClick={() => handleMarkPaidManual(booking)}
-                      disabled={['paid_manual', 'paid_stripe', 'processing_stripe'].includes(booking.payment_status || '') || markingPaidManually === booking.id || chargingSEPA === booking.id}
-                    >
-                      {markingPaidManually === booking.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <HandCoins className="h-4 w-4" />
-                      )}
-                    </Button>
-
-                    {/* NEW: Charge SEPA Direct Debit Button */}
-                    <Button 
-                      variant="outline" 
-                      size="icon" 
-                      title="Charge SEPA Direct Debit"
-                      onClick={() => handleChargeSEPA(booking)}
-                      disabled={booking.customer_details?.stripe_mandate_status !== 'active' || ['paid_stripe', 'processing_stripe', 'paid_manual'].includes(booking.payment_status || '') || chargingSEPA === booking.id || markingPaidManually === booking.id}
-                    >
-                      {chargingSEPA === booking.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Repeat className="h-4 w-4" />
-                      )}
-                    </Button>
+                    {/* NEW: Switch to Manual Collection Button */}
+                    {/* Show button if status allows (e.g., processing_stripe, failed_stripe) */}
+                    {/* Adapt these statuses based on your logic */}
+                    {['processing_stripe', 'failed_stripe'].includes(booking.payment_status || '') && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        title="Switch to Manual Collection"
+                        onClick={() => handleSwitchBookingCollectionToManual(booking)}
+                        disabled={isSwitchingBookingToManual === booking.id}
+                      >
+                        {isSwitchingBookingToManual === booking.id ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : null}
+                        Switch to Manual
+                      </Button>
+                    )}
 
                     <Button 
                       variant="destructive" 
                       size="sm"
                       onClick={() => handleDeleteClick(booking)}
-                      disabled={isDeleting}
+                      disabled={isDeleting || isSwitchingBookingToManual === booking.id} // Also disable if switching to manual
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -356,7 +349,10 @@ export function BookingsTable({ bookings, selectedColumns, columnOptions, onNewB
               {selectedColumns.includes("startDate") && <TableCell></TableCell>}
               {selectedColumns.includes("endDate") && <TableCell></TableCell>}
               {selectedColumns.includes("price") && <TableCell></TableCell>}
-              {selectedColumns.includes("totalRevenue") && <TableCell>€{totals.totalRevenue}</TableCell>}
+              {selectedColumns.includes("totalRevenue") && <TableCell>{formatCurrency(totals.totalRevenue)}</TableCell>}
+              {selectedColumns.includes("booking_status") && <TableCell></TableCell>}
+              {selectedColumns.includes("payment_status") && <TableCell></TableCell>}
+              {selectedColumns.includes("payment_type") && <TableCell></TableCell>}
               <TableCell></TableCell>
             </TableRow>
           </TableBody>

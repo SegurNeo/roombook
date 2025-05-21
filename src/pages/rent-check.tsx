@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Calendar, Download, Settings2, Plus } from "lucide-react";
+import { Calendar, Download, Settings2, Plus, MoreHorizontal } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { format } from "date-fns";
@@ -13,6 +13,12 @@ import { UserFilter } from "@/components/user-filter";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useNavigate } from "react-router-dom";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface RentTransaction {
   id: string;
@@ -521,27 +527,29 @@ export function RentCheck() {
                     <TableCell>{transaction.user.name}</TableCell>
                   )}
                   <TableCell>
-                    <div className="flex items-center space-x-1"> 
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleMarkAsPaidManually(transaction.id)}
-                        disabled={transaction.status === 'paid' || transaction.status === 'paid_manually' || loading}
-                      >
-                        Mark Paid
-                      </Button>
-                      { (transaction.status === 'scheduled' || transaction.status === 'processing' || transaction.status === 'failed') && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleSwitchToManual(transaction.id, transaction.status)}
-                          disabled={loading}
-                          title="Switch to Manual Collection"
-                        >
-                          To Manual
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm">
+                          Actions <MoreHorizontal className="ml-2 h-4 w-4" />
                         </Button>
-                      )}
-                    </div>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={() => handleMarkAsPaidManually(transaction.id)}
+                          disabled={transaction.status === 'paid' || transaction.status === 'paid_manually' || loading}
+                        >
+                          Mark invoice as paid
+                        </DropdownMenuItem>
+                        {(transaction.status === 'scheduled' || transaction.status === 'processing' || transaction.status === 'failed') && (
+                          <DropdownMenuItem
+                            onClick={() => handleSwitchToManual(transaction.id, transaction.status)}
+                            disabled={loading}
+                          >
+                            Switch to manual collection
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               ))}

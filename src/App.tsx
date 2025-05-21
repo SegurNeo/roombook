@@ -22,6 +22,7 @@ import { Onboarding } from './pages/auth/onboarding';
 import { Team } from './pages/team';
 import { AcceptInvite } from './pages/auth/accept-invite';
 import { CompleteInvite } from './pages/auth/complete-invite';
+import { BookingDetailPage } from "./pages/booking-detail";
 import { useState, useEffect } from 'react';
 import { Toaster } from "@/components/ui/toaster";
 import { FormatProvider } from '@/components/format-provider';
@@ -202,6 +203,7 @@ function App() {
                               <Route path="/assets/:id" element={<AssetDetails />} />
                               <Route path="/assets" element={<Assets onNewAsset={() => setShowNewAsset(true)} />} />
                               <Route path="/bookings" element={<Bookings />} />
+                              <Route path="/bookings/:bookingId" element={<BookingDetailPage />} />
                               <Route path="/rent-check" element={<RentCheck />} />
                               <Route path="/settings" element={<Settings />} />
                               <Route path="/profile" element={<Profile />} />
