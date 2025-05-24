@@ -163,9 +163,17 @@ export function CustomersTable({ customers, selectedColumns, columnOptions, onDe
     // Handle single payment method (legacy compatibility)
     const mandateStatus = customer.payment_methods?.[0]?.stripe_mandate_status || customer.stripe_mandate_status;
     
+    // Debug log for Pedro López
+    if (customer.email === 'pepelop@gmail.com') {
+      console.log('🔍 DEBUG Pedro López mandate check:', {
+        mandateStatus,
+        aboutToReturn: mandateStatus === 'active' ? 'ACTIVE STATUS' : 'OTHER STATUS'
+      });
+    }
+    
     switch (mandateStatus) {
       case 'active':
-        return {
+        const activeResult = {
           status: 'active',
           label: 'Active',
           color: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
@@ -173,6 +181,13 @@ export function CustomersTable({ customers, selectedColumns, columnOptions, onDe
           description: 'Payment method is configured and active',
           count: 1
         };
+        
+        // Debug log for Pedro López
+        if (customer.email === 'pepelop@gmail.com') {
+          console.log('🎯 FINAL Pedro López result:', activeResult);
+        }
+        
+        return activeResult;
       case 'failed':
         return {
           status: 'failed',
@@ -356,6 +371,8 @@ export function CustomersTable({ customers, selectedColumns, columnOptions, onDe
       // Check if the response contains an error (even with 200 status)
       if (data?.error) {
         console.error("Function returned error:", data.error);
+        
+        // Handle specific error types (can add more specific error handling here if needed)
         
         if (typeof data.error === 'string') {
           if (data.error.includes("Customer not found") || 

@@ -1,5 +1,8 @@
+// @ts-ignore - Deno imports not recognized locally
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+// @ts-ignore - Deno imports not recognized locally
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+// @ts-ignore - Deno imports not recognized locally
 import Stripe from "https://esm.sh/stripe@11.1.0";
 
 // Define CORS headers
@@ -9,15 +12,27 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// @ts-ignore - Deno global not recognized locally
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!, {
   apiVersion: "2023-10-16",
   httpClient: Stripe.createFetchHttpClient(),
 });
 
 const supabaseAdmin = createClient(
+  // @ts-ignore - Deno global not recognized locally
   Deno.env.get("SUPABASE_URL") ?? "",
+  // @ts-ignore - Deno global not recognized locally
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
 );
+
+// Helper function to ensure URL has https protocol
+function ensureHttpsProtocol(url: string): string {
+  if (!url) return url;
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+  return `https://${url}`;
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -45,7 +60,7 @@ serve(async (req) => {
 
     const { data: customer, error: fetchError } = await supabaseAdmin
       .from('customers')
-      .select('stripe_customer_id')
+      .select('stripe_customer_id, first_name, last_name')
       .eq('id', supabase_customer_id)
       .single();
 
@@ -60,17 +75,41 @@ serve(async (req) => {
     const stripeCustomerId = customer.stripe_customer_id;
     console.log(`Found Stripe customer ID: ${stripeCustomerId}`);
 
-    // Use provided URLs or fallback to default ones
-    const defaultSuccessUrl = `${Deno.env.get('SITE_URL') || 'http://localhost:5173'}/customers?setup_success=true`;
-    const defaultCancelUrl = `${Deno.env.get('SITE_URL') || 'http://localhost:5173'}/customers`;
+    // Log existing payment methods for this customer
+    try {
+      const existingPaymentMethods = await stripe.paymentMethods.list({
+        customer: stripeCustomerId,
+        type: 'sepa_debit',
+      });
+
+      console.log(`Customer ${customer.first_name} ${customer.last_name} has ${existingPaymentMethods.data.length} existing SEPA payment methods`);
+
+      // Note: Stripe naturally prevents duplicate payment methods with the same IBAN
+      // If a customer tries to add the same bank account, Stripe will return the existing Payment Method ID
+
+    } catch (stripeError) {
+      console.error("Error checking existing payment methods:", stripeError);
+      // Continue with setup - don't block for Stripe API errors
+    }
+
+    // Use provided URLs or fallback to default ones with proper protocol
+    // @ts-ignore - Deno global not recognized locally
+    const siteUrl = Deno.env.get('SITE_URL') || 'http://localhost:5173';
+    const defaultSuccessUrl = `${ensureHttpsProtocol(siteUrl)}/customers?setup_success=true`;
+    const defaultCancelUrl = `${ensureHttpsProtocol(siteUrl)}/customers`;
+
+    const finalSuccessUrl = success_url ? ensureHttpsProtocol(success_url) : defaultSuccessUrl;
+    const finalCancelUrl = cancel_url ? ensureHttpsProtocol(cancel_url) : defaultCancelUrl;
+
+    console.log(`Creating Stripe session with URLs - Success: ${finalSuccessUrl}, Cancel: ${finalCancelUrl}`);
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['sepa_debit'],
       mode: 'setup',
       currency: 'eur',
       customer: stripeCustomerId,
-      success_url: success_url || defaultSuccessUrl,
-      cancel_url: cancel_url || defaultCancelUrl,
+      success_url: finalSuccessUrl,
+      cancel_url: finalCancelUrl,
       metadata: {
         supabase_customer_id: supabase_customer_id,
       },

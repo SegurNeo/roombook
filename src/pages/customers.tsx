@@ -73,17 +73,73 @@ export function Customers({ }: CustomersProps) {
     const setup_success = searchParams.get('setup_success');
     console.log('[Customers.tsx] useEffect for setup_success - setup_success param:', setup_success);
     if (setup_success === 'true') {
-      toast({
-        title: "Payment Method Configured!",
-        description: "The payment method has been successfully configured for this customer.",
-        variant: "default",
-      });
+      // Check if any customer has the 'updated_existing' flag
+      checkForPaymentMethodUpdates();
+      
       // Remove the query parameter using setSearchParams
       const newSearchParams = new URLSearchParams(searchParams.toString()); // Create a mutable copy
       newSearchParams.delete('setup_success');
       setSearchParams(newSearchParams, { replace: true });
     }
   }, [searchParams, setSearchParams, toast]); // Add setSearchParams to dependencies
+
+  const checkForPaymentMethodUpdates = async () => {
+    try {
+      // Find customers with recent payment method actions
+      const { data: customersWithActions, error } = await supabase
+        .from('customers')
+        .select('id, first_name, last_name, last_payment_method_action, last_payment_method_action_at')
+        .eq('last_payment_method_action', 'updated_existing')
+        .gte('last_payment_method_action_at', new Date(Date.now() - 10 * 60 * 1000).toISOString()) // Last 10 minutes
+        .order('last_payment_method_action_at', { ascending: false })
+        .limit(1);
+
+      if (error) {
+        console.error('Error checking for payment method actions:', error);
+        // Fallback to generic success message
+        toast({
+          title: "Payment Method Configured!",
+          description: "The payment method has been successfully configured for this customer.",
+          variant: "default",
+        });
+        return;
+      }
+
+      if (customersWithActions && customersWithActions.length > 0) {
+        const customer = customersWithActions[0];
+        // Show specific message for existing payment method update
+        toast({
+          title: "Payment Method Updated!",
+          description: `The existing payment method for ${customer.first_name} ${customer.last_name} has been updated. This occurred because the same bank account was already configured for this customer.`,
+          variant: "default",
+        });
+
+        // Clear the flag so it doesn't show again
+        await supabase
+          .from('customers')
+          .update({ 
+            last_payment_method_action: null,
+            last_payment_method_action_at: null
+          })
+          .eq('id', customer.id);
+      } else {
+        // Generic success message
+        toast({
+          title: "Payment Method Configured!",
+          description: "The payment method has been successfully configured for this customer.",
+          variant: "default",
+        });
+      }
+    } catch (error) {
+      console.error('Error in checkForPaymentMethodUpdates:', error);
+      // Fallback to generic success message
+      toast({
+        title: "Payment Method Configured!",
+        description: "The payment method has been successfully configured for this customer.",
+        variant: "default",
+      });
+    }
+  };
 
   const fetchCustomers = async () => {
     try {
@@ -106,6 +162,8 @@ export function Customers({ }: CustomersProps) {
           stripe_customer_id,
           stripe_payment_method_id,
           stripe_mandate_status,
+          last_payment_method_action,
+          last_payment_method_action_at,
           customer_payment_methods!customer_payment_methods_customer_id_fkey (
             id,
             stripe_payment_method_id,
@@ -147,6 +205,9 @@ export function Customers({ }: CustomersProps) {
           stripe_customer_id: customer.stripe_customer_id,
           stripe_payment_method_id: customer.stripe_payment_method_id,
           stripe_mandate_status: customer.stripe_mandate_status,
+          // Payment method action tracking
+          last_payment_method_action: customer.last_payment_method_action,
+          last_payment_method_action_at: customer.last_payment_method_action_at,
           // New multiple payment methods data
           payment_methods: (customer.customer_payment_methods as any[])?.map(pm => ({
             id: pm.id,

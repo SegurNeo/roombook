@@ -74,7 +74,7 @@ async function upsertCustomerPaymentMethod(
       }
 
       console.log(`Updated existing payment method ${existingPM.id} for customer ${supabaseCustomerId}`);
-      return { success: true, paymentMethodRecord: existingPM };
+      return { success: true, paymentMethodRecord: existingPM, isUpdate: true };
     } else {
       // Insert new payment method
       // First check if customer has any payment methods to determine if this should be default
@@ -213,6 +213,18 @@ serve(async (req) => {
               console.error(`Error managing payment method for customer ${supabaseCustomerId}:`, pmResult.error);
             } else {
               console.log(`Payment method successfully managed for customer ${supabaseCustomerId}`);
+              
+              // If this was an update of existing payment method, mark it for frontend notification
+              if (pmResult.isUpdate) {
+                await supabaseAdmin
+                  .from('customers')
+                  .update({ 
+                    last_payment_method_action: 'updated_existing',
+                    last_payment_method_action_at: new Date().toISOString()
+                  })
+                  .eq('id', supabaseCustomerId);
+                console.log(`Marked customer ${supabaseCustomerId} for 'updated_existing' notification`);
+              }
             }
           } else {
             console.warn("Missing data in checkout.session.completed (setup):", { supabaseCustomerId, paymentMethodId, setupIntentId });
@@ -249,6 +261,18 @@ serve(async (req) => {
               console.error(`Error managing payment method for customer ${supabaseCustomerId}:`, pmResult.error);
             } else {
               console.log(`Payment method successfully managed for customer ${supabaseCustomerId}`);
+              
+              // If this was an update of existing payment method, mark it for frontend notification
+              if (pmResult.isUpdate) {
+                await supabaseAdmin
+                  .from('customers')
+                  .update({ 
+                    last_payment_method_action: 'updated_existing',
+                    last_payment_method_action_at: new Date().toISOString()
+                  })
+                  .eq('id', supabaseCustomerId);
+                console.log(`Marked customer ${supabaseCustomerId} for 'updated_existing' notification`);
+              }
             }
          } else {
             console.warn("Missing data in setup_intent.succeeded:", { supabaseCustomerId, paymentMethodId });
