@@ -47,9 +47,14 @@ serve(async (req) => {
   }
 
   try {
-    const { supabase_customer_id, success_url, cancel_url } = await req.json();
+    const requestBody = await req.json();
+    console.log("Received request body:", JSON.stringify(requestBody, null, 2));
+    
+    const { supabase_customer_id, success_url, cancel_url } = requestBody;
+    console.log("Extracted values:", { supabase_customer_id, success_url, cancel_url });
 
     if (!supabase_customer_id) {
+      console.error("Missing supabase_customer_id in request:", requestBody);
       return new Response(JSON.stringify({ error: "Missing supabase_customer_id" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

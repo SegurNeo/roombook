@@ -413,10 +413,26 @@ export function CustomerDetails() {
 
   // Function to setup payment method
   const handleSetupPaymentMethod = async () => {
-    if (!customer?.id || !customer.stripe_customer_id) return;
+    if (!customer?.id || !customer.stripe_customer_id) {
+      console.error("Cannot setup payment method - missing data:", {
+        customerId: customer?.id,
+        stripeCustomerId: customer?.stripe_customer_id,
+        hasCustomer: !!customer
+      });
+      toast({
+        title: "Error",
+        description: "Customer data is incomplete. Please refresh the page and try again.",
+        variant: "destructive",
+      });
+      return;
+    }
     
     try {
-      console.log(`Requesting payment method setup for customer ID: ${customer.id}`);
+      console.log(`Requesting payment method setup for customer:`, {
+        id: customer.id,
+        stripe_customer_id: customer.stripe_customer_id,
+        name: `${customer.first_name} ${customer.last_name}`
+      });
       
       const { data, error: functionError } = await supabase.functions.invoke(
         'create-sepa-setup-session',
@@ -431,11 +447,18 @@ export function CustomerDetails() {
 
       if (functionError) {
         console.error("Supabase function error:", functionError);
+        console.error("Full function error details:", {
+          message: functionError.message,
+          status: functionError.status,
+          statusText: functionError.statusText,
+          details: functionError.details
+        });
         throw new Error(functionError.message || "Error creating payment method setup session.");
       }
 
       if (data?.error) {
         console.error("Function returned error:", data.error);
+        console.error("Full data response:", data);
         throw new Error(data.error || "Error creating payment method setup session.");
       }
 
