@@ -53,7 +53,6 @@ interface CustomersTableProps {
 const statusStyles = {
   person: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
   company: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300",
-  'N/A': "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300",
 };
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '');
@@ -133,10 +132,10 @@ export function CustomersTable({ customers, selectedColumns, columnOptions, onDe
       if (activeCount === paymentMethodsCount) {
         return {
           status: 'multiple_active',
-          label: `${paymentMethodsCount} Activos`,
+          label: `${paymentMethodsCount} Active`,
           color: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
           canConfigure: false,
-          description: `Cliente tiene ${paymentMethodsCount} métodos de pago activos`,
+          description: `Customer has ${paymentMethodsCount} active payment methods`,
           count: paymentMethodsCount
         };
       } else if (activeCount > 0) {
@@ -512,15 +511,19 @@ export function CustomersTable({ customers, selectedColumns, columnOptions, onDe
       case "status":
         return (
           <TableCell>
-            <Badge 
-              variant="secondary" 
-              className={cn(
-                "capitalize",
-                statusStyles[customer.status as keyof typeof statusStyles]
-              )}
-            >
-              {customer.status}
-            </Badge>
+            {customer.status !== 'N/A' ? (
+              <Badge 
+                variant="secondary" 
+                className={cn(
+                  "capitalize",
+                  statusStyles[customer.status as keyof typeof statusStyles]
+                )}
+              >
+                {customer.status}
+              </Badge>
+            ) : (
+              <span className="text-muted-foreground">-</span>
+            )}
           </TableCell>
         );
       case "nextActionDate":
@@ -573,96 +576,98 @@ export function CustomersTable({ customers, selectedColumns, columnOptions, onDe
               <TableRow key={customer.id}>
                 {visibleColumns.map((column) => renderCell(customer, column.id))}
                 <TableCell>
-                  <div className="flex items-center space-x-2">
-                    <Button
-                      variant="secondary"
-                      onClick={() => navigate(`/customers/${customer.id}`)}
-                      className="flex items-center"
-                    >
-                      <Pencil className="h-4 w-4 mr-2" />
-                      Edit
-                    </Button>
-                    {(() => {
-                      const paymentStatus = getPaymentMethodStatus(customer);
-                      const isConfiguring = configuringCustomerId === customer.id;
-                      const isSyncing = syncingCustomerId === customer.id;
-                      
-                      // Show sync button for not configured customers
-                      if (paymentStatus.status === 'not_configured') {
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <Button
+                        variant="secondary"
+                        onClick={() => navigate(`/customers/${customer.id}`)}
+                        className="flex items-center"
+                      >
+                        <Pencil className="h-4 w-4 mr-2" />
+                        Edit
+                      </Button>
+                      {(() => {
+                        const paymentStatus = getPaymentMethodStatus(customer);
+                        const isConfiguring = configuringCustomerId === customer.id;
+                        const isSyncing = syncingCustomerId === customer.id;
+                        
+                        // Show sync button for not configured customers
+                        if (paymentStatus.status === 'not_configured') {
+                          return (
+                            <Button
+                              variant="outline"
+                              onClick={() => handleSyncWithStripe(customer)}
+                              disabled={isSyncing}
+                              className="flex items-center whitespace-nowrap"
+                              title="Sync this customer with the payment system first"
+                            >
+                              {isSyncing ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  Syncing...
+                                </>
+                              ) : (
+                                <>
+                                  <CreditCard className="h-4 w-4 mr-2" />
+                                  Sync with Stripe
+                                </>
+                              )}
+                            </Button>
+                          );
+                        }
+                        
+                        // Handle multiple payment methods - navigate to customer details for management
+                        if (paymentStatus.count > 1) {
+                          return (
+                            <Button
+                              variant="secondary"
+                              onClick={() => navigate(`/customers/${customer.id}?tab=payment-methods`)}
+                              className="flex items-center whitespace-nowrap"
+                              title={`View and manage ${paymentStatus.count} payment methods`}
+                            >
+                              <CreditCard className="h-4 w-4 mr-2" />
+                              Manage payment methods ({paymentStatus.count})
+                            </Button>
+                          );
+                        }
+                        
+                        // Handle single payment method or no payment methods
                         return (
                           <Button
-                            variant="outline"
-                            onClick={() => handleSyncWithStripe(customer)}
-                            disabled={isSyncing}
-                            className="flex items-center whitespace-nowrap"
-                            title="Sync this customer with the payment system first"
+                            variant={paymentStatus.canConfigure ? "secondary" : "ghost"}
+                            onClick={() => {
+                              if (paymentStatus.status === 'active' || paymentStatus.count > 0) {
+                                // Navigate to customer details payment methods tab for management
+                                navigate(`/customers/${customer.id}?tab=payment-methods`);
+                              } else {
+                                // Setup new payment method
+                                handleConfigurePaymentMethod(customer);
+                              }
+                            }}
+                            disabled={(!paymentStatus.canConfigure && paymentStatus.status !== 'active') || isConfiguring}
+                            className={cn(
+                              "flex items-center whitespace-nowrap",
+                              !paymentStatus.canConfigure && paymentStatus.status !== 'active' && "opacity-50 cursor-not-allowed"
+                            )}
+                            title={paymentStatus.description}
                           >
-                            {isSyncing ? (
+                            {isConfiguring ? (
                               <>
                                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                Syncing...
+                                Setting up...
                               </>
                             ) : (
                               <>
                                 <CreditCard className="h-4 w-4 mr-2" />
-                                Sync with Stripe
+                                {paymentStatus.status === 'ready_to_setup' ? 'Setup Payment' : 
+                                 paymentStatus.status === 'active' ? 'Manage payment methods (1)' : 
+                                 paymentStatus.canConfigure ? 'Configure' : 'View'}
                               </>
                             )}
                           </Button>
                         );
-                      }
-                      
-                      // Handle multiple payment methods - navigate to customer details for management
-                      if (paymentStatus.count > 1) {
-                        return (
-                          <Button
-                            variant="secondary"
-                            onClick={() => navigate(`/customers/${customer.id}`)}
-                            className="flex items-center whitespace-nowrap"
-                            title={`View and manage ${paymentStatus.count} payment methods`}
-                          >
-                            <CreditCard className="h-4 w-4 mr-2" />
-                            Manage ({paymentStatus.count})
-                          </Button>
-                        );
-                      }
-                      
-                      // Handle single payment method or no payment methods
-                      return (
-                        <Button
-                          variant={paymentStatus.canConfigure ? "secondary" : "ghost"}
-                          onClick={() => {
-                            if (paymentStatus.status === 'active' || paymentStatus.count > 0) {
-                              // Navigate to customer details for management
-                              navigate(`/customers/${customer.id}`);
-                            } else {
-                              // Setup new payment method
-                              handleConfigurePaymentMethod(customer);
-                            }
-                          }}
-                          disabled={(!paymentStatus.canConfigure && paymentStatus.status !== 'active') || isConfiguring}
-                          className={cn(
-                            "flex items-center whitespace-nowrap",
-                            !paymentStatus.canConfigure && paymentStatus.status !== 'active' && "opacity-50 cursor-not-allowed"
-                          )}
-                          title={paymentStatus.description}
-                        >
-                          {isConfiguring ? (
-                            <>
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              Setting up...
-                            </>
-                          ) : (
-                            <>
-                              <CreditCard className="h-4 w-4 mr-2" />
-                              {paymentStatus.status === 'ready_to_setup' ? 'Setup Payment' : 
-                               paymentStatus.status === 'active' ? 'View/Manage' : 
-                               paymentStatus.canConfigure ? 'Configure' : 'View'}
-                            </>
-                          )}
-                        </Button>
-                      );
-                    })()}
+                      })()}
+                    </div>
                     <Button
                       variant="destructive"
                       onClick={() => handleDeleteClick(customer)}

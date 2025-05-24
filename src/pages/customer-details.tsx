@@ -620,7 +620,7 @@ export function CustomerDetails() {
                 </Badge>
               </div>
 
-              <Tabs defaultValue="details" className="space-y-6">
+              <Tabs defaultValue={searchParams.get('tab') || "details"} className="space-y-6">
                 <TabsList>
                   <TabsTrigger value="details">Customer Details</TabsTrigger>
                   <TabsTrigger value="payment-methods">Payment Methods</TabsTrigger>
