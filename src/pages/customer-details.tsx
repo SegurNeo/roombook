@@ -152,11 +152,14 @@ export function CustomerDetails() {
     if (mandateStatus) {
       if (mandateStatus === 'success') {
         toast({
-          title: "Mandate Setup Initiated",
-          description: "Stripe is processing the mandate setup. The status will update shortly.",
-          duration: 7000,
+          title: "Processing Payment Method...",
+          description: "Please wait while we update your payment method information.",
+          duration: 10000,
         });
-        if (id) fetchCustomerDetails();
+        if (id) {
+          // Poll for updates since webhook processing takes time
+          pollForPaymentMethodUpdates();
+        }
       } else if (mandateStatus === 'cancel') {
         toast({
           title: "Mandate Setup Cancelled",
@@ -170,6 +173,86 @@ export function CustomerDetails() {
     }
 
   }, [id, searchParams, setSearchParams, toast]);
+
+  // Function to poll for payment method updates after Stripe checkout
+  const pollForPaymentMethodUpdates = async () => {
+    if (!id) return;
+    
+    // Get initial payment methods count
+    const initialData = customer?.customer_payment_methods?.length || 0;
+    
+    let attempts = 0;
+    const maxAttempts = 12; // 12 attempts × 2.5s = 30 seconds max
+    
+    const checkForUpdates = async (): Promise<void> => {
+      try {
+        attempts++;
+        console.log(`Polling attempt ${attempts}/${maxAttempts} for payment method updates...`);
+        
+        const { data, error } = await supabase
+          .from('customers')
+          .select(`
+            customer_payment_methods!customer_payment_methods_customer_id_fkey (
+              id,
+              stripe_payment_method_id,
+              stripe_mandate_status,
+              payment_method_type,
+              is_default,
+              nickname,
+              last_four,
+              created_at
+            )
+          `)
+          .eq('id', id)
+          .single();
+
+        if (error) {
+          console.error('Error polling for updates:', error);
+          return;
+        }
+
+        const currentCount = data?.customer_payment_methods?.length || 0;
+        
+        // Check if payment methods have been updated
+        if (currentCount > initialData) {
+          console.log(`Payment method update detected! Count: ${initialData} → ${currentCount}`);
+          
+          // Refresh full customer data
+          await fetchCustomerDetails();
+          
+          toast({
+            title: "Payment Method Added Successfully!",
+            description: "Your new payment method has been configured and is ready to use.",
+            variant: "default",
+          });
+          
+          return; // Stop polling
+        }
+        
+        // Continue polling if no changes and haven't reached max attempts
+        if (attempts < maxAttempts) {
+          setTimeout(() => checkForUpdates(), 2500); // Wait 2.5 seconds before next attempt
+        } else {
+          console.log('Polling timeout reached. Refreshing data anyway...');
+          await fetchCustomerDetails();
+          
+          toast({
+            title: "Payment Method Processing",
+            description: "Your payment method is being processed. It may take a few minutes to appear.",
+            variant: "default",
+          });
+        }
+        
+      } catch (error) {
+        console.error('Error in polling check:', error);
+        // On error, just refresh the data once
+        await fetchCustomerDetails();
+      }
+    };
+    
+    // Start polling after initial delay to allow webhook processing
+    setTimeout(() => checkForUpdates(), 2000);
+  };
 
   const fetchCustomerDetails = async () => {
     if (!id) return;
