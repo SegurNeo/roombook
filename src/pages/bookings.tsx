@@ -109,7 +109,7 @@ export function Bookings({ }: BookingsProps) {
 
       const transformedBookings = bookingsData?.map(booking => ({
         id: booking.id,
-        customer: `${(booking.customers as any)?.first_name || ''} ${(booking.customers as any)?.last_name || ''}`.trim(),
+        customer: `${(booking.customers as any)?.first_name || ''} ${(booking.customers as any)?.last_name || ''}`.trim() || 'Unknown',
         customer_details: booking.customers,
         asset: (booking.rooms as any)?.assets?.name || 'Unknown',
         room: (booking.rooms as any)?.name || 'Unknown',

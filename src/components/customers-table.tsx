@@ -27,6 +27,19 @@ interface Customer {
     name: string;
     image: string;
   };
+  stripe_customer_id?: string | null;
+  stripe_payment_method_id?: string | null;
+  stripe_mandate_status?: string | null;
+  payment_methods?: Array<{
+    id: string;
+    stripe_payment_method_id: string;
+    stripe_mandate_status: string;
+    payment_method_type: string;
+    is_default: boolean;
+    nickname: string;
+    last_four?: string;
+  }>;
+  payment_methods_count?: number;
 }
 
 interface CustomersTableProps {
@@ -54,12 +67,129 @@ export function CustomersTable({ customers, selectedColumns, columnOptions, onDe
   const [password, setPassword] = useState("");
   const { toast } = useToast();
   const [configuringCustomerId, setConfiguringCustomerId] = useState<string | null>(null);
+  const [syncingCustomerId, setSyncingCustomerId] = useState<string | null>(null);
 
   const DELETE_PASSWORD = "delete123";
 
   if (!import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY) {
     console.error("Stripe publishable key not found. Please set VITE_STRIPE_PUBLISHABLE_KEY.");
   }
+
+  // Helper function to determine payment method configuration status
+  const getPaymentMethodStatus = (customer: Customer) => {
+    // Check if customer is synced with Stripe
+    if (!customer.stripe_customer_id) {
+      return {
+        status: 'not_configured',
+        label: 'Not configured',
+        color: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300',
+        canConfigure: false,
+        description: 'Customer needs to be synced with payment system first',
+        count: 0
+      };
+    }
+    
+    // Use new payment_methods array if available, otherwise fall back to legacy fields
+    const paymentMethods = customer.payment_methods || [];
+    const paymentMethodsCount = customer.payment_methods_count || paymentMethods.length;
+    
+    // If no payment methods at all
+    if (paymentMethodsCount === 0 && !customer.stripe_payment_method_id) {
+      return {
+        status: 'ready_to_setup',
+        label: 'Ready to setup',
+        color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
+        canConfigure: true,
+        description: 'Customer is ready to configure payment method',
+        count: 0
+      };
+    }
+    
+    // Handle multiple payment methods
+    if (paymentMethodsCount > 1) {
+      const activeCount = paymentMethods.filter(pm => pm.stripe_mandate_status === 'active').length;
+      
+      if (activeCount === paymentMethodsCount) {
+        return {
+          status: 'multiple_active',
+          label: `${paymentMethodsCount} Activos`,
+          color: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
+          canConfigure: false,
+          description: `Cliente tiene ${paymentMethodsCount} métodos de pago activos`,
+          count: paymentMethodsCount
+        };
+      } else if (activeCount > 0) {
+        return {
+          status: 'multiple_mixed',
+          label: `${activeCount}/${paymentMethodsCount} Active`,
+          color: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
+          canConfigure: true,
+          description: `Customer has ${activeCount} active out of ${paymentMethodsCount} payment methods`,
+          count: paymentMethodsCount
+        };
+      } else {
+        return {
+          status: 'multiple_inactive',
+          label: `${paymentMethodsCount} Inactive`,
+          color: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
+          canConfigure: true,
+          description: `Customer has ${paymentMethodsCount} inactive payment methods`,
+          count: paymentMethodsCount
+        };
+      }
+    }
+    
+    // Handle single payment method (legacy compatibility)
+    const mandateStatus = customer.payment_methods?.[0]?.stripe_mandate_status || customer.stripe_mandate_status;
+    
+    switch (mandateStatus) {
+      case 'active':
+        return {
+          status: 'active',
+          label: 'Active',
+          color: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
+          canConfigure: false,
+          description: 'Payment method is configured and active',
+          count: 1
+        };
+      case 'failed':
+        return {
+          status: 'failed',
+          label: 'Setup failed',
+          color: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
+          canConfigure: true,
+          description: 'Payment method setup failed, needs reconfiguration',
+          count: 1
+        };
+      case 'pending':
+        return {
+          status: 'pending',
+          label: 'Setup pending',
+          color: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
+          canConfigure: false,
+          description: 'Payment method setup is in progress',
+          count: 1
+        };
+      case 'inactive':
+        return {
+          status: 'inactive',
+          label: 'Inactive',
+          color: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
+          canConfigure: true,
+          description: 'Payment method is inactive, may need reconfiguration',
+          count: 1
+        };
+      default:
+        return {
+          status: 'unknown',
+          label: 'Unknown status',
+          color: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
+          canConfigure: true,
+          description: 'Payment method status is unknown, may need reconfiguration',
+          count: paymentMethodsCount || 1
+        };
+    }
+  };
 
   if (customers.length === 0) {
     return (
@@ -133,15 +263,49 @@ export function CustomersTable({ customers, selectedColumns, columnOptions, onDe
     }
   };
 
-  const handleConfigureSEPA = async (customer: Customer) => {
+  const handleConfigurePaymentMethod = async (customer: Customer) => {
     if (!customer.id) {
         toast({ title: "Error", description: "Customer ID is missing.", variant: "destructive"});
         return;
     }
+
+    // Validate that we have the Stripe publishable key
+    if (!import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY) {
+      toast({
+        title: "Configuration Error",
+        description: "Payment system is not properly configured. Please contact support.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Get payment method status and validate if customer can configure payment method
+    const paymentStatus = getPaymentMethodStatus(customer);
+    
+    if (!paymentStatus.canConfigure) {
+      toast({
+        title: "Payment Method Setup Not Available",
+        description: paymentStatus.description,
+        variant: "default",
+      });
+      return;
+    }
+
+    // Special handling for not configured customers
+    if (paymentStatus.status === 'not_configured') {
+      toast({
+        title: "Customer Not Synced",
+        description: `${customer.name} needs to be synced with the payment system first. Please contact your administrator.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     setConfiguringCustomerId(customer.id);
 
     try {
-      console.log(`Requesting SEPA setup for Supabase customer ID: ${customer.id}`);
+      console.log(`Requesting payment method setup for customer ID: ${customer.id}`);
+      
       const { data, error: functionError } = await supabase.functions.invoke(
         'create-sepa-setup-session',
         { 
@@ -154,36 +318,146 @@ export function CustomersTable({ customers, selectedColumns, columnOptions, onDe
       );
 
       if (functionError) {
-        throw new Error(functionError.message || "Failed to create SEPA setup session.");
+        console.error("Supabase function error:", functionError);
+        
+        // Handle specific error cases
+        if (functionError.message?.includes("Customer not found") || 
+            functionError.message?.includes("not synced with Stripe")) {
+          throw new Error(
+            `Customer ${customer.name} is not synced with the payment system. ` +
+            "Please contact your administrator to sync the customer first."
+          );
+        }
+        
+        throw new Error(functionError.message || "Failed to create payment method setup session.");
+      }
+
+      // Check if the response contains an error (even with 200 status)
+      if (data?.error) {
+        console.error("Function returned error:", data.error);
+        
+        if (typeof data.error === 'string') {
+          if (data.error.includes("Customer not found") || 
+              data.error.includes("not synced with Stripe")) {
+            throw new Error(
+              `Customer ${customer.name} is not synced with the payment system. ` +
+              "Please contact your administrator to sync the customer first."
+            );
+          }
+          throw new Error(data.error);
+        } else if (data.error.message) {
+          throw new Error(data.error.message);
+        } else {
+          throw new Error("Unknown error occurred while setting up payment method.");
+        }
       }
 
       const { sessionId } = data;
       if (!sessionId) {
-        throw new Error("Checkout Session ID not received from function.");
+        throw new Error("Payment setup session ID not received from server.");
       }
 
       console.log(`Received Stripe Checkout Session ID: ${sessionId}`);
 
       const stripe = await stripePromise;
       if (!stripe) {
-        throw new Error("Stripe.js failed to load.");
+        throw new Error("Payment system failed to load. Please check your internet connection and try again.");
       }
 
       const { error: redirectError } = await stripe.redirectToCheckout({ sessionId });
 
       if (redirectError) {
-        console.error("Stripe redirection error:", redirectError);
-        throw new Error(redirectError.message || "Failed to redirect to Stripe.");
+        console.error("Payment system redirection error:", redirectError);
+        throw new Error(redirectError.message || "Failed to redirect to payment setup.");
       }
 
+      // If we get here, the redirect should be happening, so we don't reset the loading state
+
     } catch (error: any) {
-      console.error("Error during SEPA configuration:", error);
+      console.error("Error during payment method configuration:", error);
+      
+      // Provide more specific error messages based on the error type
+      let errorMessage = "Could not initiate payment method setup. Please try again.";
+      
+      if (error.message?.includes("not synced with")) {
+        errorMessage = error.message;
+      } else if (error.message?.includes("Customer not found")) {
+        errorMessage = `Customer ${customer.name} not found in the system. Please verify that the customer exists.`;
+      } else if (error.message?.includes("Stripe")) {
+        errorMessage = `Payment system error: ${error.message}`;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
-        title: "SEPA Setup Error",
-        description: error.message || "Could not initiate SEPA configuration. Please try again.",
+        title: "Payment Method Setup Error",
+        description: errorMessage,
         variant: "destructive",
       });
+      
+      // Always reset the loading state on error
       setConfiguringCustomerId(null);
+    }
+  };
+
+  // NEW: Function to sync customer with Stripe
+  const handleSyncWithStripe = async (customer: Customer) => {
+    if (!customer.id) {
+      toast({ title: "Error", description: "Customer ID is missing.", variant: "destructive"});
+      return;
+    }
+
+    setSyncingCustomerId(customer.id);
+
+    try {
+      console.log(`Syncing customer ${customer.id} with Stripe`);
+      
+      const { data, error: functionError } = await supabase.functions.invoke(
+        'create-stripe-customer',
+        { 
+          body: { 
+            record: {
+              id: customer.id,
+              first_name: customer.name.split(' ')[0] || '',
+              last_name: customer.name.split(' ').slice(1).join(' ') || '',
+              email: customer.email,
+              phone_prefix: customer.phone?.split(' ')[0] || '',
+              phone_number: customer.phone?.split(' ').slice(1).join(' ') || '',
+              payer_type: customer.status !== 'N/A' ? customer.status : null,
+              notes: null
+            }
+          } 
+        }
+      );
+
+      if (functionError) {
+        console.error("Stripe sync error:", functionError);
+        throw new Error(functionError.message || "Failed to sync customer with Stripe.");
+      }
+
+      if (data?.error) {
+        console.error("Function returned error:", data.error);
+        throw new Error(data.error.details || data.error || "Failed to sync customer with Stripe.");
+      }
+
+      toast({
+        title: "Customer Synced!",
+        description: `${customer.name} has been successfully synced with the payment system.`,
+      });
+
+      // Refresh the page to update the customer data
+      window.location.reload();
+
+    } catch (error: any) {
+      console.error("Error syncing customer with Stripe:", error);
+      
+      toast({
+        title: "Sync Error",
+        description: error.message || "Could not sync customer with payment system. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSyncingCustomerId(null);
     }
   };
 
@@ -220,6 +494,19 @@ export function CustomersTable({ customers, selectedColumns, columnOptions, onDe
           console.warn(`Malformed user data for customer ${customer.id}:`, customer.user);
           return <TableCell>-</TableCell>;
         }
+      case "payment_method_status":
+        const paymentStatus = getPaymentMethodStatus(customer);
+        return (
+          <TableCell>
+            <Badge 
+              variant="secondary" 
+              className={cn("capitalize", paymentStatus.color)}
+              title={paymentStatus.description}
+            >
+              {paymentStatus.label}
+            </Badge>
+          </TableCell>
+        );
       default:
         const col = columnOptions.find(c => c.id === columnId);
         let value = customer[columnId as keyof Customer] ?? '-';
@@ -257,19 +544,87 @@ export function CustomersTable({ customers, selectedColumns, columnOptions, onDe
                       <Pencil className="h-4 w-4 mr-2" />
                       Edit
                     </Button>
-                    <Button
-                      variant="secondary"
-                      onClick={() => handleConfigureSEPA(customer)}
-                      disabled={configuringCustomerId === customer.id}
-                      className="flex items-center whitespace-nowrap"
-                    >
-                      {configuringCustomerId === customer.id ? (
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      ) : (
-                          <CreditCard className="h-4 w-4 mr-2" />
-                      )}
-                      Configure Payment
-                    </Button>
+                    {(() => {
+                      const paymentStatus = getPaymentMethodStatus(customer);
+                      const isConfiguring = configuringCustomerId === customer.id;
+                      const isSyncing = syncingCustomerId === customer.id;
+                      
+                      // Show sync button for not configured customers
+                      if (paymentStatus.status === 'not_configured') {
+                        return (
+                          <Button
+                            variant="outline"
+                            onClick={() => handleSyncWithStripe(customer)}
+                            disabled={isSyncing}
+                            className="flex items-center whitespace-nowrap"
+                            title="Sync this customer with the payment system first"
+                          >
+                            {isSyncing ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Syncing...
+                              </>
+                            ) : (
+                              <>
+                                <CreditCard className="h-4 w-4 mr-2" />
+                                Sync with Stripe
+                              </>
+                            )}
+                          </Button>
+                        );
+                      }
+                      
+                      // Handle multiple payment methods - navigate to customer details for management
+                      if (paymentStatus.count > 1) {
+                        return (
+                          <Button
+                            variant="secondary"
+                            onClick={() => navigate(`/customers/${customer.id}`)}
+                            className="flex items-center whitespace-nowrap"
+                            title={`View and manage ${paymentStatus.count} payment methods`}
+                          >
+                            <CreditCard className="h-4 w-4 mr-2" />
+                            Manage ({paymentStatus.count})
+                          </Button>
+                        );
+                      }
+                      
+                      // Handle single payment method or no payment methods
+                      return (
+                        <Button
+                          variant={paymentStatus.canConfigure ? "secondary" : "ghost"}
+                          onClick={() => {
+                            if (paymentStatus.status === 'active' || paymentStatus.count > 0) {
+                              // Navigate to customer details for management
+                              navigate(`/customers/${customer.id}`);
+                            } else {
+                              // Setup new payment method
+                              handleConfigurePaymentMethod(customer);
+                            }
+                          }}
+                          disabled={(!paymentStatus.canConfigure && paymentStatus.status !== 'active') || isConfiguring}
+                          className={cn(
+                            "flex items-center whitespace-nowrap",
+                            !paymentStatus.canConfigure && paymentStatus.status !== 'active' && "opacity-50 cursor-not-allowed"
+                          )}
+                          title={paymentStatus.description}
+                        >
+                          {isConfiguring ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Setting up...
+                            </>
+                          ) : (
+                            <>
+                              <CreditCard className="h-4 w-4 mr-2" />
+                              {paymentStatus.status === 'ready_to_setup' ? 'Setup Payment' : 
+                               paymentStatus.status === 'active' ? 'View/Manage' : 
+                               paymentStatus.canConfigure ? 'Configure' : 'View'}
+                            </>
+                          )}
+                        </Button>
+                      );
+                    })()}
                     <Button
                       variant="destructive"
                       onClick={() => handleDeleteClick(customer)}

@@ -70,10 +70,10 @@ interface AssetDetails {
 
 interface Booking {
   id: string;
-  customer?: {
+  customers: {
     first_name: string;
     last_name: string;
-  };
+  }[];
   start_date: string;
   end_date: string;
   rent_price: number;
@@ -175,6 +175,9 @@ export function AssetDetails() {
       if (assetError) throw assetError;
       if (!assetData) throw new Error('Asset not found');
 
+      // Buscar todos los bookings de las rooms de este asset
+      const roomIds = assetData.rooms.map(room => room.id);
+      
       const { data: bookingsData, error: bookingsError } = await supabase
         .from('bookings')
         .select(`
@@ -188,7 +191,7 @@ export function AssetDetails() {
             last_name
           )
         `)
-        .in('room_id', assetData.rooms.map(room => room.id))
+        .in('room_id', roomIds)
         .order('start_date', { ascending: false });
 
       if (bookingsError) throw bookingsError;
@@ -679,9 +682,11 @@ export function AssetDetails() {
                   </thead>
                   <tbody>
                     {bookings.map((booking) => (
-                      <tr key={booking.id} className="border-b">
+                      <tr key={booking.id} className="border-b cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/bookings/${booking.id}`)}>
                         <td className="p-4">
-                          {booking.customer ? `${booking.customer.first_name} ${booking.customer.last_name}` : 'Unknown'}
+                          {(booking.customers as any)?.first_name && (booking.customers as any)?.last_name 
+                            ? `${(booking.customers as any).first_name} ${(booking.customers as any).last_name}` 
+                            : 'Unknown'}
                         </td>
                         <td className="p-4">{formatDate(new Date(booking.start_date), settings)}</td>
                         <td className="p-4">{formatDate(new Date(booking.end_date), settings)}</td>
@@ -845,10 +850,9 @@ export function AssetDetails() {
                           className="text-sm p-2 rounded-lg bg-muted"
                         >
                           <div className="font-medium">
-                            {booking.customer 
-                              ? `${booking.customer.first_name} ${booking.customer.last_name}`
-                              : 'Unknown Customer'
-                            }
+                            {(booking.customers as any)?.first_name && (booking.customers as any)?.last_name 
+                              ? `${(booking.customers as any).first_name} ${(booking.customers as any).last_name}` 
+                              : 'Unknown'}
                           </div>
                           <div className="text-muted-foreground">
                             {formatDate(new Date(booking.start_date), settings)} - {formatDate(new Date(booking.end_date), settings)}

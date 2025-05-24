@@ -25,17 +25,13 @@ interface RentTransaction {
 // Placeholder for Booking type, adjust based on your actual Booking interface in bookings-table.tsx
 interface BookingDetail {
   id: string;
-  // asset: string; // Will come from rooms.assets.name
-  // room: string;  // Will come from rooms.name
-  start_date: string; // Changed from startDate
-  end_date: string;   // Changed from endDate
-  rent_price: number; // Changed from price, assuming number from DB
-  deposit_amount: number; // Added for totalRevenue calculation, assuming number
-  // totalRevenue: string; // Will be calculated or ensure it is selected if direct column
-  status: string;     // Changed from booking_status
+  start_date: string;
+  end_date: string;
+  rent_price: number;
+  deposit_amount: number;
+  status: string;
   payment_status?: string | null;
   stripe_payment_intent_id?: string | null;
-  // Add other fields as needed, e.g., customer details, user, etc.
   customer_id: string;
   customers?: {
     id: string;
@@ -45,7 +41,6 @@ interface BookingDetail {
     email?: string;
     phone_prefix?: string;
     phone_number?: string;
-    // any other customer details you might want to show
   };
   profiles?: {
     id?: string;
@@ -53,17 +48,17 @@ interface BookingDetail {
     image?: string;
   };
   created_at?: string;
-  room_id: string; // FK to rooms
-  rooms?: { // To store details from the related room
+  room_id: string;
+  rooms?: {
     id: string;
     name: string;
-    asset_id: string; // FK to assets
-    assets?: { // To store details from the related asset
+    asset_id: string;
+    assets?: {
         id: string;
         name: string;
     };
   };
-  rent_transactions?: RentTransaction[]; // Added for storing related transactions
+  rent_transactions?: RentTransaction[];
 }
 
 const paymentStatusStyles: { [key: string]: string } = {

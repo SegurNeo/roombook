@@ -29,6 +29,7 @@ const columnOptions: ColumnOption[] = [
   { id: "email", label: "Email" },
   { id: "phone", label: "Phone" },
   { id: "status", label: "Status" },
+  { id: "payment_method_status", label: "Payment Method" },
   { id: "nextActionDate", label: "Next action date" },
   { id: "user", label: "Created by" },
 ];
@@ -49,7 +50,7 @@ export function Customers({ }: CustomersProps) {
   const [tempDateRange, setTempDateRange] = useState(dateRange);
   const [activeTab, setActiveTab] = useState("entry");
   const [selectedColumns, setSelectedColumns] = useState<string[]>(
-    columnOptions.filter(col => col.required || ["email", "phone", "status", "nextActionDate", "user"].includes(col.id)).map(col => col.id)
+    columnOptions.filter(col => col.required || ["email", "phone", "status", "payment_method_status", "nextActionDate", "user"].includes(col.id)).map(col => col.id)
   );
   const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,8 +74,8 @@ export function Customers({ }: CustomersProps) {
     console.log('[Customers.tsx] useEffect for setup_success - setup_success param:', setup_success);
     if (setup_success === 'true') {
       toast({
-        title: "¡Configuración SEPA completada!",
-        description: "El método de pago SEPA ha sido configurado exitosamente.",
+        title: "Payment Method Configured!",
+        description: "The payment method has been successfully configured for this customer.",
         variant: "default",
       });
       // Remove the query parameter using setSearchParams
@@ -102,6 +103,19 @@ export function Customers({ }: CustomersProps) {
           payer_type,
           payer_name,
           created_by,
+          stripe_customer_id,
+          stripe_payment_method_id,
+          stripe_mandate_status,
+          customer_payment_methods!customer_payment_methods_customer_id_fkey (
+            id,
+            stripe_payment_method_id,
+            stripe_mandate_status,
+            payment_method_type,
+            is_default,
+            nickname,
+            last_four,
+            created_at
+          ),
           profiles!customers_created_by_fkey (
             id,
             full_name
@@ -127,7 +141,22 @@ export function Customers({ }: CustomersProps) {
         user: {
           name: (customer.profiles as any)?.full_name || 'Unknown',
           image: `https://api.dicebear.com/7.x/initials/svg?seed=${(customer.profiles as any)?.full_name || 'Unknown'}`
-        }
+        },
+        // Legacy fields for backward compatibility
+        stripe_customer_id: customer.stripe_customer_id,
+        stripe_payment_method_id: customer.stripe_payment_method_id,
+        stripe_mandate_status: customer.stripe_mandate_status,
+        // New multiple payment methods data
+        payment_methods: (customer.customer_payment_methods as any[])?.map(pm => ({
+          id: pm.id,
+          stripe_payment_method_id: pm.stripe_payment_method_id,
+          stripe_mandate_status: pm.stripe_mandate_status,
+          payment_method_type: pm.payment_method_type,
+          is_default: pm.is_default,
+          nickname: pm.nickname,
+          last_four: pm.last_four
+        })) || [],
+        payment_methods_count: (customer.customer_payment_methods as any[])?.length || 0
       }));
 
       setCustomers(transformedCustomers);
@@ -409,14 +438,14 @@ export function Customers({ }: CustomersProps) {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <CheckCircle2 className="h-6 w-6 text-green-500" />
-                Configuración SEPA Completada
+                Payment Method Configured
               </DialogTitle>
             </DialogHeader>
             <div className="py-4">
-              <p>El método de pago SEPA ha sido configurado exitosamente para este cliente.</p>
+              <p>The payment method has been successfully configured for this customer.</p>
             </div>
             <DialogFooter>
-              <Button onClick={() => setShowSuccessModal(false)}>Aceptar</Button>
+              <Button onClick={() => setShowSuccessModal(false)}>Close</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
