@@ -77,6 +77,18 @@ export function CustomersTable({ customers, selectedColumns, columnOptions, onDe
 
   // Helper function to determine payment method configuration status
   const getPaymentMethodStatus = (customer: Customer) => {
+    // Debug logging for Pedro López
+    if (customer.email === 'pepelop@gmail.com') {
+      console.log('🔍 DEBUG Pedro López data:', {
+        name: customer.name,
+        stripe_customer_id: customer.stripe_customer_id,
+        stripe_payment_method_id: customer.stripe_payment_method_id,
+        stripe_mandate_status: customer.stripe_mandate_status,
+        payment_methods: customer.payment_methods,
+        payment_methods_count: customer.payment_methods_count
+      });
+    }
+    
     // Check if customer is synced with Stripe
     if (!customer.stripe_customer_id) {
       return {
@@ -92,6 +104,15 @@ export function CustomersTable({ customers, selectedColumns, columnOptions, onDe
     // Use new payment_methods array if available, otherwise fall back to legacy fields
     const paymentMethods = customer.payment_methods || [];
     const paymentMethodsCount = customer.payment_methods_count || paymentMethods.length;
+    
+    // Debug logging for Pedro López
+    if (customer.email === 'pepelop@gmail.com') {
+      console.log('🔍 DEBUG Pedro López processed:', {
+        paymentMethods,
+        paymentMethodsCount,
+        firstPmStatus: paymentMethods[0]?.stripe_mandate_status
+      });
+    }
     
     // If no payment methods at all
     if (paymentMethodsCount === 0 && !customer.stripe_payment_method_id) {

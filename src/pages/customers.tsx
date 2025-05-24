@@ -130,34 +130,48 @@ export function Customers({ }: CustomersProps) {
 
       if (error) throw error;
 
-      const transformedCustomers = customersData.map(customer => ({
-        id: customer.id,
-        name: `${customer.first_name} ${customer.last_name}`,
-        clientId: customer.id_number,
-        email: customer.email,
-        phone: `${customer.phone_prefix} ${customer.phone_number}`,
-        status: customer.payer_type || 'N/A',
-        nextActionDate: format(new Date(customer.created_at), 'PP'),
-        user: {
-          name: (customer.profiles as any)?.full_name || 'Unknown',
-          image: `https://api.dicebear.com/7.x/initials/svg?seed=${(customer.profiles as any)?.full_name || 'Unknown'}`
-        },
-        // Legacy fields for backward compatibility
-        stripe_customer_id: customer.stripe_customer_id,
-        stripe_payment_method_id: customer.stripe_payment_method_id,
-        stripe_mandate_status: customer.stripe_mandate_status,
-        // New multiple payment methods data
-        payment_methods: (customer.customer_payment_methods as any[])?.map(pm => ({
-          id: pm.id,
-          stripe_payment_method_id: pm.stripe_payment_method_id,
-          stripe_mandate_status: pm.stripe_mandate_status,
-          payment_method_type: pm.payment_method_type,
-          is_default: pm.is_default,
-          nickname: pm.nickname,
-          last_four: pm.last_four
-        })) || [],
-        payment_methods_count: (customer.customer_payment_methods as any[])?.length || 0
-      }));
+      const transformedCustomers = customersData.map(customer => {
+        const transformed = {
+          id: customer.id,
+          name: `${customer.first_name} ${customer.last_name}`,
+          clientId: customer.id_number,
+          email: customer.email,
+          phone: `${customer.phone_prefix} ${customer.phone_number}`,
+          status: customer.payer_type || 'N/A',
+          nextActionDate: format(new Date(customer.created_at), 'PP'),
+          user: {
+            name: (customer.profiles as any)?.full_name || 'Unknown',
+            image: `https://api.dicebear.com/7.x/initials/svg?seed=${(customer.profiles as any)?.full_name || 'Unknown'}`
+          },
+          // Legacy fields for backward compatibility
+          stripe_customer_id: customer.stripe_customer_id,
+          stripe_payment_method_id: customer.stripe_payment_method_id,
+          stripe_mandate_status: customer.stripe_mandate_status,
+          // New multiple payment methods data
+          payment_methods: (customer.customer_payment_methods as any[])?.map(pm => ({
+            id: pm.id,
+            stripe_payment_method_id: pm.stripe_payment_method_id,
+            stripe_mandate_status: pm.stripe_mandate_status,
+            payment_method_type: pm.payment_method_type,
+            is_default: pm.is_default,
+            nickname: pm.nickname,
+            last_four: pm.last_four
+          })) || [],
+          payment_methods_count: (customer.customer_payment_methods as any[])?.length || 0
+        };
+        
+        // Debug log for Pedro López
+        if (customer.email === 'pepelop@gmail.com') {
+          console.log('🔄 TRANSFORM Pedro López:', {
+            original_customer_payment_methods: customer.customer_payment_methods,
+            transformed_payment_methods: transformed.payment_methods,
+            transformed_payment_methods_count: transformed.payment_methods_count,
+            legacy_stripe_mandate_status: transformed.stripe_mandate_status
+          });
+        }
+        
+        return transformed;
+      });
 
       setCustomers(transformedCustomers);
     } catch (error: any) {
